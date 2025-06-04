@@ -50,6 +50,27 @@ def setup_macro(cfg):
     parser = GNNParser(env, T=cfg.time_horizon, json_file=f"src/envs/data/macro/scenario_{city}.json")
     return env, parser
 
+def setup_multi_macro(cfg):
+    from src.envs.sim.multi_macro_env import Scenario, AMoD, GNNParser
+    with open("src/envs/data/macro/calibrated_parameters.json", "r") as file:
+        calibrated_params = json.load(file)
+    cfg.simulator.cplexpath = cfg.model.cplexpath
+    if not cfg.simulator.directory:
+        cfg.simulator.directory = f"{cfg.model.name}/{cfg.simulator.city}"
+    cfg = cfg.simulator
+    city = cfg.city
+    scenario = Scenario(
+        json_file=f"src/envs/data/macro/scenario_{city}.json",
+        demand_ratio=calibrated_params[city]["demand_ratio"],
+        json_hr=calibrated_params[city]["json_hr"],
+        sd=cfg.seed,
+        json_tstep=calibrated_params[city]["test_tstep"],
+        tf=cfg.max_steps,
+    )
+    env = AMoD(scenario, cfg = cfg, beta = calibrated_params[city]["beta"])
+    parser = GNNParser(env, T=cfg.time_horizon, json_file=f"src/envs/data/macro/scenario_{city}.json")
+    return env, parser
+
 def setup_model(cfg, env, parser, device):
     model_name = cfg.model.name
     
@@ -100,6 +121,8 @@ def test(config):
         env, parser = setup_sumo(cfg)
     elif simulator_name == "macro":
         env, parser = setup_macro(cfg)
+    elif simulator_name == "multi_macro":
+        env, parser = setup_multi_macro(cfg)
     else:
         raise ValueError(f"Unknown simulator: {simulator_name}")
     
@@ -118,7 +141,7 @@ def test(config):
     inflows = np.mean(inflows, axis=0)
     
     #check if no_control performance is saved
-    path = f'/src/envs/data/{cfg.simulator.name}/{cfg.simulator.city}_no_control_performance.json'
+    path = f'./src/envs/data/{cfg.simulator.name}/{cfg.simulator.city}_no_control_performance.json'
     #check if path exists
     if os.path.exists(path):
         with open(path, 'r') as f:
@@ -137,6 +160,7 @@ def test(config):
         no_reb_cost = round(np.mean(no_reb_cost)/1000,2)
         no_control_performance = {'reward': no_reb_reward, 'served_demand': no_reb_demand, 'rebalancing_cost': no_reb_cost}
         print(f'No control performance calculated. Saving in {path}...')
+        print(os.getcwd())
         with open(path, 'w') as f:
             json.dump(no_control_performance, f)
 
@@ -247,6 +271,9 @@ def main(cfg: DictConfig):
 
     elif simulator_name == "macro":
         env, parser = setup_macro(cfg)
+
+    elif simulator_name == "multi_macro":
+        env, parser = setup_multi_macro(cfg)
     else:
         raise ValueError(f"Unknown simulator: {simulator_name}")
 
