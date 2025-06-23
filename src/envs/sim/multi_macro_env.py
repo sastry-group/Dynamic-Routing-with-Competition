@@ -10,6 +10,7 @@ import torch
 from torch_geometric.data import Data
 from pulp import LpMaximize, LpProblem, LpVariable, lpSum, LpStatus, value
 import pulp
+import sys
 
 class AMoD:
     # initialization
@@ -71,6 +72,7 @@ class AMoD:
         self.obs = (self.acc, self.time, self.dacc, self.demand)
     
     def matching(self, CPLEXPATH=None, PATH='', platform = 'linux'):
+        # print(getattr(sys, 'frozen', False))
         #CPLEXPATH = 'None'
         if CPLEXPATH=='None':
             return self.matching_pulp()
@@ -116,7 +118,8 @@ class AMoD:
             paxAction = [flow[i,j] if (i,j) in flow else 0 for i,j in self.edges]
             return paxAction
 
-    def matching_pulp(self, number_of_firms=2):
+    def matching_pulp(self, number_of_firms=3):
+        # print(getattr(sys, 'frozen', False))
         #region, acc_init, demand, price, demand_edges
         t = self.time
 
@@ -187,18 +190,19 @@ class AMoD:
                 continue
             # I moved the min operator above, since we want paxFlow to be consistent with paxAction
             assert paxAction[k] < self.acc[i][t+1] + 1e-3
-            self.paxAction[k] = min(self.acc[i][t+1], paxAction[k])            
-            self.servedDemand[i,j][t] = self.paxAction[k]
-            self.paxFlow[i,j][t+self.demandTime[i,j][t]] = self.paxAction[k]
-            self.info["operating_cost"] += self.demandTime[i,j][t]*self.beta*self.paxAction[k]
-            self.acc[i][t+1] -= self.paxAction[k]
-            self.info['served_demand'] += self.servedDemand[i,j][t]            
-            self.dacc[j][t+self.demandTime[i,j][t]] += self.paxFlow[i,j][t+self.demandTime[i,j][t]]
-            self.reward += self.paxAction[k]*(self.price[i,j][t] - self.demandTime[i,j][t]*self.beta)  
-            test_rew += self.paxAction[k]*(self.price[i,j][t]) 
+            # acc - available vehicles in region, dacc - arriving vehicles in region, paxAction - number of vehicles with passengers
+            self.paxAction[k] = min(self.acc[i][t+1], paxAction[k]) # Make sure action does not exceed available vehicles            
+            self.servedDemand[i,j][t] = self.paxAction[k] # amount of demand served in this time step
+            self.paxFlow[i,j][t+self.demandTime[i,j][t]] = self.paxAction[k] # vehicles with passengers flowing region i to region j at time t+self.demandTime[i,j][t]
+            self.info["operating_cost"] += self.demandTime[i,j][t]*self.beta*self.paxAction[k] # Calculate operating cost
+            self.acc[i][t+1] -= self.paxAction[k] # How many vehicles are left in region i at time t+1
+            self.info['served_demand'] += self.servedDemand[i,j][t] # How much demand is served in this time step            
+            self.dacc[j][t+self.demandTime[i,j][t]] += self.paxFlow[i,j][t+self.demandTime[i,j][t]] # Adding in passenger vehicles to those arriving in region j at time t+self.demandTime[i,j][t]
+            self.reward += self.paxAction[k]*(self.price[i,j][t] - self.demandTime[i,j][t]*self.beta)  # reward is price - operating cost (I'm guessing price is what the passengers pay?)
+            test_rew += self.paxAction[k]*(self.price[i,j][t]) # Reward from serving passengers, so adding revenue from passengers
 
-            self.info['revenue'] += self.paxAction[k]*(self.price[i,j][t])  
-            self.info['profit'] += self.paxAction[k]*(self.price[i,j][t] - self.demandTime[i,j][t]*self.beta) 
+            self.info['revenue'] += self.paxAction[k]*(self.price[i,j][t]) # Revenue from serving passengers
+            self.info['profit'] += self.paxAction[k]*(self.price[i,j][t] - self.demandTime[i,j][t]*self.beta)  # profit is price - operating cost
 
         self.obs = (self.acc, self.time, self.dacc, self.demand) # for acc, the time index would be t+1, but for demand, the time index would be t
         done = False # if passenger matching is executed first
@@ -569,14 +573,14 @@ class GNNParser():
             with open(json_file,"r") as file:
                 self.data = json.load(file)
         
-    def parse_obs(self, obs):
+    def parse_obs(self, obs, number_of_firms=3):
         x = torch.cat((
-            torch.tensor([obs[0][n][self.env.time+1]*self.s for n in self.env.region]).view(1, 1, self.env.nregion).float(), 
+            torch.tensor([obs[0][n][self.env.time+1]*self.s*number_of_firms for n in self.env.region]).view(1, 1, self.env.nregion).float(), 
 
-            torch.tensor([[(obs[0][n][self.env.time+1] + self.env.dacc[n][t])*self.s for n in self.env.region] \
+            torch.tensor([[(obs[0][n][self.env.time+1] + self.env.dacc[n][t])*self.s*number_of_firms for n in self.env.region] \
                           for t in range(self.env.time+1, self.env.time+self.T+1)]).view(1, self.T, self.env.nregion).float(), 
 
-            torch.tensor([[sum([(self.env.scenario.demand_input[i,j][t])*(self.env.price[i,j][t])*self.s \
+            torch.tensor([[sum([(self.env.scenario.demand_input[i,j][t]/number_of_firms)*(self.env.price[i,j][t])*self.s \
                           for j in self.env.region]) for i in self.env.region] for t in range(self.env.time+1, self.env.time+self.T+1)]).view(1, self.T, self.env.nregion).float()),
                           
               dim=1).squeeze(0).view(1+self.T +self.T , self.env.nregion).T
