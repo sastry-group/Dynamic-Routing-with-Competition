@@ -102,7 +102,7 @@ def solveRebFlow_pulp(env, desiredAcc):
         flow = defaultdict(float)
         for (i, j) in edges:
             flow[(i, j)] = rebFlow[(i, j)].varValue
-        print("Rebalancing Flow {}:".format(flow))
+        # print("Rebalancing Flow {}:".format(flow))
         #print(len(rebFlow.keys()))
        
         #flow_result = {(i, j): value(rebFlow[(i, j)]) for (i, j) in edges}

@@ -626,7 +626,7 @@ class SAC(nn.Module):
             episode_rebalancing_cost.append(eps_rebalancing_cost)
             episode_actions.append(np.mean(actions, axis=0))
             episode_inflows.append(inflow)
-            print("SAC Episode inflows: {}".format(inflow))
+            # print("SAC Episode inflows: {}".format(inflow))
             #episode_rebalanced_vehicles.append(eps_rebalancing_veh)
         
 

@@ -575,9 +575,9 @@ class GNNParser():
         
     def parse_obs(self, obs, number_of_firms=3):
         x = torch.cat((
-            torch.tensor([obs[0][n][self.env.time+1]*self.s*number_of_firms for n in self.env.region]).view(1, 1, self.env.nregion).float(), 
+            torch.tensor([obs[0][n][self.env.time+1]*self.s for n in self.env.region]).view(1, 1, self.env.nregion).float(), 
 
-            torch.tensor([[(obs[0][n][self.env.time+1] + self.env.dacc[n][t])*self.s*number_of_firms for n in self.env.region] \
+            torch.tensor([[(obs[0][n][self.env.time+1] + self.env.dacc[n][t])*self.s for n in self.env.region] \
                           for t in range(self.env.time+1, self.env.time+self.T+1)]).view(1, self.T, self.env.nregion).float(), 
 
             torch.tensor([[sum([(self.env.scenario.demand_input[i,j][t]/number_of_firms)*(self.env.price[i,j][t])*self.s \
