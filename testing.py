@@ -140,7 +140,7 @@ def multi_test(input_config):
         profit, inflows = test_approach(cfg, env, parser, device)
         data[0][config["model.name"]], data[1][config['model.name']] = profit, inflows
 
-    control_data = get_no_control_performance(cfg, env, parser, device)
+    control_data = get_no_control_performance(cfg, env, parser, device, use_saved_data=cfg.simulator.reuse_no_control)
 
     plot_comparison(cfg, env, control_data, data)
 
@@ -169,11 +169,11 @@ def test_approach(cfg, env, parser, device):
     return rl_means, inflows
     
 
-def get_no_control_performance(cfg, env, parser, device):
+def get_no_control_performance(cfg, env, parser, device, use_saved_data=False):
     #check if no_control performance is saved
     path = f'./src/envs/data/{cfg.simulator.name}/{cfg.simulator.city}_no_control_performance.json'
     #check if path exists
-    if os.path.exists(path):
+    if os.path.exists(path) and use_saved_data:
         with open(path, 'r') as f:
             no_control_performance = json.load(f)
         no_reb_reward = no_control_performance['reward']
@@ -229,7 +229,10 @@ def plot_comparison(cfg, env, control_data, comparison_data):
     # Add some text for labels, title and custom x-axis tick labels, etc.
     ax1.set_xlabel('Metrics')
     ax1.set_ylabel('$, x10^3')
-    ax1.set_title(f'Comparison on {cfg.simulator.city} Environment')
+    if cfg.simulator.firm_count == 1:
+        ax1.set_title(f'Comparison on {cfg.simulator.city} Environment with 1 Firm')
+    else:
+        ax1.set_title(f'Comparison on {cfg.simulator.city} Environment with {cfg.simulator.firm_count} Firms')
     ax1.set_xticks(x)
     ax1.set_xticklabels(labels)
     ax1.legend()

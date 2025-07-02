@@ -118,20 +118,20 @@ class AMoD:
             paxAction = [flow[i,j] if (i,j) in flow else 0 for i,j in self.edges]
             return paxAction
 
-    def matching_pulp(self, number_of_firms=3):
+    def matching_pulp(self):
         # print(getattr(sys, 'frozen', False))
         #region, acc_init, demand, price, demand_edges
         t = self.time
 
         acc_init = {n: self.acc[n][t+1] for n in self.acc}
 
-        agent_demand = {(i, j): self.demand[i,j][t] for ind, (i,j) in enumerate(self.demand) if t in self.demand[i,j] and self.demand[i,j][t]>1e-3 and (ind % number_of_firms == 0)}
+        agent_demand = {(i, j): self.demand[i,j][t] for ind, (i,j) in enumerate(self.demand) if t in self.demand[i,j] and self.demand[i,j][t]>1e-3 and (ind % self.cfg.firm_count == 0)}
         # agent_demand = total_demand[::number_of_firms] if len(total_demand) > 1 else total_demand
 
-        agent_price = {(i, j): self.price[i,j][t] for ind, (i,j) in enumerate(self.price) if t in self.demand[i,j] and self.demand[i,j][t]>1e-3 and (ind % number_of_firms == 0)}
+        agent_price = {(i, j): self.price[i,j][t] for ind, (i,j) in enumerate(self.price) if t in self.demand[i,j] and self.demand[i,j][t]>1e-3 and (ind % self.cfg.firm_count == 0)}
         # agent_price = total_price[::number_of_firms] if len(total_price) > 1 else total_price
         
-        agent_demand_edges = [(i, j) for ind, (i,j) in enumerate(self.demand) if t in self.demand[i,j] and self.demand[i,j][t]>1e-3 and (ind % number_of_firms == 0)]
+        agent_demand_edges = [(i, j) for ind, (i,j) in enumerate(self.demand) if t in self.demand[i,j] and self.demand[i,j][t]>1e-3 and (ind % self.cfg.firm_count == 0)]
         # agent_demand_edges = total_demand_edges[::number_of_firms] if len(total_demand_edges) > 1 else total_demand_edges
 
         region = [n for n in acc_init]
@@ -146,7 +146,7 @@ class AMoD:
         }
 
         # Objective function: maximize total revenue
-        model += lpSum(flow[(i, j)] * 0.9 * agent_price[(i, j)] for (i, j) in agent_demand_edges), "TotalRevenue"
+        model += lpSum(flow[(i, j)] * agent_price[(i, j)] for (i, j) in agent_demand_edges), "TotalRevenue"
 
         # Supply constraints: total flow out of each region <= initial availability
         for k in region:
@@ -573,17 +573,22 @@ class GNNParser():
             with open(json_file,"r") as file:
                 self.data = json.load(file)
         
-    def parse_obs(self, obs, number_of_firms=3):
+    def parse_obs(self, obs):
+        if self.env.cfg.agents_know_partial_demand:
+            demand_factor = self.env.cfg.firm_count
+        else:
+            demand_factor = 1
+            
         x = torch.cat((
             torch.tensor([obs[0][n][self.env.time+1]*self.s for n in self.env.region]).view(1, 1, self.env.nregion).float(), 
 
             torch.tensor([[(obs[0][n][self.env.time+1] + self.env.dacc[n][t])*self.s for n in self.env.region] \
                           for t in range(self.env.time+1, self.env.time+self.T+1)]).view(1, self.T, self.env.nregion).float(), 
 
-            torch.tensor([[sum([(self.env.scenario.demand_input[i,j][t]/number_of_firms)*(self.env.price[i,j][t])*self.s \
-                          for j in self.env.region]) for i in self.env.region] for t in range(self.env.time+1, self.env.time+self.T+1)]).view(1, self.T, self.env.nregion).float()),
-                          
-              dim=1).squeeze(0).view(1+self.T +self.T , self.env.nregion).T
+            torch.tensor([[sum([(self.env.scenario.demand_input[i,j][t]/demand_factor)*(self.env.price[i,j][t])*self.s \
+                        for j in self.env.region]) for i in self.env.region] for t in range(self.env.time+1, self.env.time+self.T+1)]).view(1, self.T, self.env.nregion).float()),
+                            
+            dim=1).squeeze(0).view(1+self.T +self.T , self.env.nregion).T
         
         if self.json_file is not None:
             edge_index = torch.vstack((torch.tensor([edge['i'] for edge in self.data["topology_graph"]]).view(1,-1), 
