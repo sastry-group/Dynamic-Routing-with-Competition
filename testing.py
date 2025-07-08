@@ -62,6 +62,10 @@ def setup_multi_macro(cfg):
         cfg.simulator.directory = f"{cfg.model.name}/{cfg.simulator.city}"
     cfg = cfg.simulator
     city = cfg.city
+    if cfg.constant_vehicle_count:
+        supply_factor = cfg.firm_count
+    else:
+        supply_factor = 1
     scenario = Scenario(
         json_file=f"src/envs/data/macro/scenario_{city}.json",
         demand_ratio=calibrated_params[city]["demand_ratio"],
@@ -69,6 +73,7 @@ def setup_multi_macro(cfg):
         sd=cfg.seed,
         json_tstep=calibrated_params[city]["test_tstep"],
         tf=cfg.max_steps,
+        supply_factor=supply_factor
     )
     env = AMoD(scenario, cfg = cfg, beta = calibrated_params[city]["beta"])
     parser = GNNParser(env, T=cfg.time_horizon, json_file=f"src/envs/data/macro/scenario_{city}.json")

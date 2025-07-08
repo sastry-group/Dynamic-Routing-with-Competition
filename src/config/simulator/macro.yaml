@@ -25,3 +25,5 @@ reuse_no_control: false
 firm_count: 1
 
 agents_know_partial_demand: false
+
+constant_vehicle_count: true
