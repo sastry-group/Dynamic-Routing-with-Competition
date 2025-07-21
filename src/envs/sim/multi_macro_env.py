@@ -10,7 +10,9 @@ import torch
 from torch_geometric.data import Data
 from pulp import LpMaximize, LpProblem, LpVariable, lpSum, LpStatus, value
 import pulp
-import sys
+import os
+from datetime import datetime
+
 
 class AMoD:
     # initialization
@@ -524,8 +526,6 @@ class Scenario:
                 
         
         
-        
-        
     def get_random_demand(self, reset = False):        
         # generate demand and price
         # reset = True means that the function is called in the reset() method of AMoD enviroment,
@@ -585,6 +585,7 @@ class Scenario:
                     tripAttr.append((i,j,t,demand[i,j][t],price[i,j][t]))
 
         return tripAttr
+    
 
 class GNNParser():
     """

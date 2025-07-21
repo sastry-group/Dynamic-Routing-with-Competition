@@ -9,6 +9,7 @@ import os
 import copy
 import seaborn as sns
 import matplotlib.pyplot as plt
+import time
 
 def setup_sumo(cfg):
     from src.envs.sim.sumo_env import Scenario, AMoD, GNNParser
@@ -77,6 +78,7 @@ def setup_multi_macro(cfg):
         firm_count=cfg.firm_count,
         demand_filter_type = cfg.demand_filter_type
     )
+    save_sampled_demand(scenario.tripAttr)
     env = AMoD(scenario, cfg = cfg, beta = calibrated_params[city]["beta"])
     parser = GNNParser(env, T=cfg.time_horizon, json_file=f"src/envs/data/macro/scenario_{city}.json")
     return env, parser
@@ -151,6 +153,16 @@ def multi_test(input_config):
 
     plot_comparison(cfg, env, control_data, data)
 
+
+def save_sampled_demand(tripAttr):
+    # save the sampled demand to a file
+
+    current_time = time.strftime("%Y%m%d-%H%M%S")
+    if not os.path.exists('saved_files'):
+        os.makedirs('saved_files')
+    with open(f'saved_files/sample_demand_{current_time}.json', 'w') as f:
+        print(f'Saving sampled demand to saved_files/sample_demand_{current_time}.json')
+        json.dump(tripAttr, f, indent=4)
         
 def test_approach(cfg, env, parser, device):
     model = setup_model(cfg, env, parser, device)
