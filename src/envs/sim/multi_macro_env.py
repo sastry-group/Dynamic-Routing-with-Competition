@@ -122,17 +122,29 @@ class AMoD:
         # print(getattr(sys, 'frozen', False))
         #region, acc_init, demand, price, demand_edges
         t = self.time
-
         acc_init = {n: self.acc[n][t+1] for n in self.acc}
-
-        agent_demand = {(i, j): self.demand[i,j][t] for ind, (i,j) in enumerate(self.demand) if t in self.demand[i,j] and self.demand[i,j][t]>1e-3 and (ind % self.cfg.firm_count == 0)}
-        # agent_demand = total_demand[::number_of_firms] if len(total_demand) > 1 else total_demand
-
-        agent_price = {(i, j): self.price[i,j][t] for ind, (i,j) in enumerate(self.price) if t in self.demand[i,j] and self.demand[i,j][t]>1e-3 and (ind % self.cfg.firm_count == 0)}
-        # agent_price = total_price[::number_of_firms] if len(total_price) > 1 else total_price
+        demand_type = self.cfg.demand_filter_type
         
-        agent_demand_edges = [(i, j) for ind, (i,j) in enumerate(self.demand) if t in self.demand[i,j] and self.demand[i,j][t]>1e-3 and (ind % self.cfg.firm_count == 0)]
-        # agent_demand_edges = total_demand_edges[::number_of_firms] if len(total_demand_edges) > 1 else total_demand_edges
+
+        # if self.cfg.demand_filter_type == 'portion':
+        if demand_type == "portion":
+            # print(f"Setting the demand to receive a portion of them")
+            # here we are taking a portion of demand requests
+            agent_demand = {(i, j): self.demand[i,j][t] for ind, (i,j) in enumerate(self.demand) if t in self.demand[i,j] and self.demand[i,j][t]>1e-3 and (ind % self.cfg.firm_count == 0)}
+            # agent_demand = total_demand[::number_of_firms] if len(total_demand) > 1 else total_demand
+            agent_price = {(i, j): self.price[i,j][t] for ind, (i,j) in enumerate(self.price) if t in self.demand[i,j] and self.demand[i,j][t]>1e-3 and (ind % self.cfg.firm_count == 0)}
+            # agent_price = total_price[::number_of_firms] if len(total_price) > 1 else total_price
+            agent_demand_edges = [(i, j) for ind, (i,j) in enumerate(self.demand) if t in self.demand[i,j] and self.demand[i,j][t]>1e-3 and (ind % self.cfg.firm_count == 0)]
+            # agent_demand_edges = total_demand_edges[::number_of_firms] if len(total_demand_edges) > 1 else total_demand_edges
+        else:
+            # here we are taking all the demand requests
+            # print(f"Setting the demand to receive all of them")
+            agent_demand = {(i, j): self.demand[i,j][t] for ind, (i,j) in enumerate(self.demand) if t in self.demand[i,j] and self.demand[i,j][t]>1e-3}
+            agent_price = {(i, j): self.price[i,j][t] for ind, (i,j) in enumerate(self.price) if t in self.demand[i,j] and self.demand[i,j][t]>1e-3}
+            agent_demand_edges = [(i, j) for ind, (i,j) in enumerate(self.demand) if t in self.demand[i,j] and self.demand[i,j][t]>1e-3]  
+
+        # print(f"agent_demand: {agent_demand}")    
+        # print(f"agent_demand_edges: {agent_demand_edges}")    
 
         region = [n for n in acc_init]
     
@@ -146,7 +158,9 @@ class AMoD:
         }
 
         # Objective function: maximize total revenue
-        model += lpSum(flow[(i, j)] * agent_price[(i, j)] for (i, j) in agent_demand_edges), "TotalRevenue"
+        model += lpSum(flow[(i, j)] * agent_price[(i, j)] for (i,
+                                                               
+                                                                j) in agent_demand_edges), "TotalRevenue"
 
         # Supply constraints: total flow out of each region <= initial availability
         for k in region:
@@ -354,7 +368,9 @@ class AMoD:
     
 class Scenario:
     def __init__(self, N1=2, N2=4, tf=60, sd=None, ninit=5, tripAttr=None, demand_input=None, demand_ratio = None,
-                 trip_length_preference = 0.25, grid_travel_time = 1, fix_price=True, alpha = 0.2, json_file = None, json_hr = 9, json_tstep = 2, varying_time=False, json_regions = None, prune=False, supply_factor=1):
+                 trip_length_preference = 0.25, grid_travel_time = 1, fix_price=True, alpha = 0.2, json_file = None, 
+                 json_hr = 9, json_tstep = 2, varying_time=False, json_regions = None, prune=False, supply_factor=1,
+                 firm_count =1, demand_filter_type = None):
         # trip_length_preference: positive - more shorter trips, negative - more longer trips
         # grid_travel_time: travel time between grids
         # demand_input： list - total demand out of each region, 
@@ -447,8 +463,19 @@ class Scenario:
                 self.demandTime[i,j] = defaultdict(int)
                 self.rebTime[i,j] = 1
                 
-            for item in data["demand"]: 
-                t,o,d,v,tt,p = item["time_stamp"], item["origin"], item["destination"], item["demand"], item["travel_time"], item["price"]
+
+            if demand_filter_type == 'portion':
+                scale = 1
+            else:
+                scale = firm_count
+                
+
+            
+
+            for item in data["demand"]:
+                flow_based_demand  = item["demand"] / scale 
+                # print(f"flow_based_demand: {flow_based_demand}, using demand_filter_type: {demand_filter_type}, scale: {scale}")                
+                t,o,d,v,tt,p = item["time_stamp"], item["origin"], item["destination"], flow_based_demand, item["travel_time"], item["price"]
                 if json_regions!= None and (o not in json_regions or d not in json_regions):
                     continue
                 if (o,d) not in self.demand_input:

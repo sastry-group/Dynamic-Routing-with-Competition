@@ -73,7 +73,9 @@ def setup_multi_macro(cfg):
         sd=cfg.seed,
         json_tstep=calibrated_params[city]["test_tstep"],
         tf=cfg.max_steps,
-        supply_factor=supply_factor
+        supply_factor=supply_factor,
+        firm_count=cfg.firm_count,
+        demand_filter_type = cfg.demand_filter_type
     )
     env = AMoD(scenario, cfg = cfg, beta = calibrated_params[city]["beta"])
     parser = GNNParser(env, T=cfg.time_horizon, json_file=f"src/envs/data/macro/scenario_{city}.json")
