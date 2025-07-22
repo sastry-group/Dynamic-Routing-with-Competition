@@ -1,3 +1,4 @@
+from sympy import ff
 import hydra
 from omegaconf import DictConfig
 import torch
@@ -11,6 +12,8 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 import time
 from collections import defaultdict
+
+RUN_TIME = time.strftime("%Y%m%d-%H%M%S")
 
 def setup_sumo(cfg):
     from src.envs.sim.sumo_env import Scenario, AMoD, GNNParser
@@ -79,9 +82,10 @@ def setup_multi_macro(cfg):
         firm_count=cfg.firm_count,
         demand_filter_type = cfg.demand_filter_type
     )
-    sim_time = time.strftime("%Y%m%d-%H%M%S")
-    save_sampled_demand(scenario.tripAttr, sim_time)
-    env = AMoD(scenario, cfg = cfg, beta = calibrated_params[city]["beta"])
+
+    filename = RUN_TIME + "_supply_factor_" + str(supply_factor) + "_firm_count_" + str(cfg.firm_count) + "_dm_" + str(cfg.demand_filter_type)
+    save_sampled_demand(scenario.tripAttr, filename)
+    env = AMoD(scenario, cfg=cfg, beta=calibrated_params[city]["beta"])
     parser = GNNParser(env, T=cfg.time_horizon, json_file=f"src/envs/data/macro/scenario_{city}.json")
     return env, parser
 
@@ -155,7 +159,7 @@ def multi_test(input_config):
 
     plot_comparison(cfg, env, control_data, data)
 
-def save_vehicle_distribution(acc, sim_time, filename=None):
+def save_vehicle_distribution(acc, file_str=None):
     """
     Save vehicle distribution across all timesteps and regions.
     
@@ -163,7 +167,7 @@ def save_vehicle_distribution(acc, sim_time, filename=None):
         acc (defaultdict): Nested dict [region][timestep] = count.
         sim_time (str): Timestamp string for filename.
     """
-    filename = filename or f"saved_files/full_vehicle_distribution_{sim_time}.json"
+    filename = f"saved_files/vehicle_distribution_{file_str}.json"
     if not os.path.exists("saved_files"):
         os.makedirs("saved_files")
     
@@ -177,22 +181,29 @@ def save_vehicle_distribution(acc, sim_time, filename=None):
 
     print(f"Saved full vehicle distribution to {filename}")
 
-def save_sampled_demand(tripAttr, sim_time):
+def save_sampled_demand(tripAttr, filename=None):
     # save the sampled demand to a file
 
     
     if not os.path.exists('saved_files'):
         os.makedirs('saved_files')
-    with open(f'saved_files/sample_demand_{sim_time}.json', 'w') as f:
-        print(f'Saving sampled demand to saved_files/sample_demand_{sim_time}.json')
+    with open(f'saved_files/sample_demand_{filename}.json', 'w') as f:
+        print(f'Saving sampled demand to saved_files/sample_demand_{filename}.json')
         json.dump(tripAttr, f, indent=4)
         
 def test_approach(cfg, env, parser, device):
     model = setup_model(cfg, env, parser, device)
     
     print(f'Testing model {cfg.model.name} on {cfg.simulator.name} environment')
+  
     episode_reward, episode_served_demand, episode_rebalancing_cost, inflows = model.test(cfg.model.test_episodes, env)
-    save_vehicle_distribution(env.acc, sim_time=time.strftime("%Y%m%d-%H%M%S"))
+    if cfg.simulator.constant_vehicle_count:
+        supply_factor = cfg.simulator.firm_count
+    else:
+        supply_factor = 1
+    file_str = RUN_TIME + "_" + str(cfg.model.name) + "_supply_factor_" + str(supply_factor) + "_firm_count_" + str(cfg.simulator.firm_count) + "_dm_" + str(cfg.simulator.demand_filter_type)
+    print(env.acc)
+    save_vehicle_distribution(env.acc, file_str)
 
 
     print('Mean Episode Profit ($): ', np.mean(episode_reward))
@@ -361,7 +372,7 @@ def test(config):
     
     print(f'Testing model {cfg.model.name} on {cfg.simulator.name} environment')
     episode_reward, episode_served_demand, episode_rebalancing_cost, inflows = model.test(cfg.model.test_episodes, env)
-    save_vehicle_distribution(env.acc, timestep=0, sim_time=time.strftime("%Y%m%d-%H%M%S"))
+    # save_vehicle_distribution(env.acc, timestep=0, sim_time=time.strftime("%Y%m%d-%H%M%S"))
 
     print('Mean Episode Profit ($): ', np.mean(episode_reward))
     print('Mean Episode Served Demand- Proit($): ', np.mean(episode_served_demand))
