@@ -10,6 +10,7 @@ import copy
 import seaborn as sns
 import matplotlib.pyplot as plt
 import time
+from collections import defaultdict
 
 def setup_sumo(cfg):
     from src.envs.sim.sumo_env import Scenario, AMoD, GNNParser
@@ -78,7 +79,8 @@ def setup_multi_macro(cfg):
         firm_count=cfg.firm_count,
         demand_filter_type = cfg.demand_filter_type
     )
-    save_sampled_demand(scenario.tripAttr)
+    sim_time = time.strftime("%Y%m%d-%H%M%S")
+    save_sampled_demand(scenario.tripAttr, sim_time)
     env = AMoD(scenario, cfg = cfg, beta = calibrated_params[city]["beta"])
     parser = GNNParser(env, T=cfg.time_horizon, json_file=f"src/envs/data/macro/scenario_{city}.json")
     return env, parser
@@ -153,15 +155,36 @@ def multi_test(input_config):
 
     plot_comparison(cfg, env, control_data, data)
 
+def save_vehicle_distribution(acc, sim_time, filename=None):
+    """
+    Save vehicle distribution across all timesteps and regions.
+    
+    Parameters:
+        acc (defaultdict): Nested dict [region][timestep] = count.
+        sim_time (str): Timestamp string for filename.
+    """
+    filename = filename or f"saved_files/full_vehicle_distribution_{sim_time}.json"
+    if not os.path.exists("saved_files"):
+        os.makedirs("saved_files")
+    
+    full_snapshot = defaultdict(dict)
+    for region, timestep_dict in acc.items():
+        for timestep, value in timestep_dict.items():
+            full_snapshot[str(timestep)][str(region)] = float(value)
+    
+    with open(filename, "w") as f:
+        json.dump(full_snapshot, f, indent=2)
 
-def save_sampled_demand(tripAttr):
+    print(f"Saved full vehicle distribution to {filename}")
+
+def save_sampled_demand(tripAttr, sim_time):
     # save the sampled demand to a file
 
-    current_time = time.strftime("%Y%m%d-%H%M%S")
+    
     if not os.path.exists('saved_files'):
         os.makedirs('saved_files')
-    with open(f'saved_files/sample_demand_{current_time}.json', 'w') as f:
-        print(f'Saving sampled demand to saved_files/sample_demand_{current_time}.json')
+    with open(f'saved_files/sample_demand_{sim_time}.json', 'w') as f:
+        print(f'Saving sampled demand to saved_files/sample_demand_{sim_time}.json')
         json.dump(tripAttr, f, indent=4)
         
 def test_approach(cfg, env, parser, device):
@@ -169,6 +192,8 @@ def test_approach(cfg, env, parser, device):
     
     print(f'Testing model {cfg.model.name} on {cfg.simulator.name} environment')
     episode_reward, episode_served_demand, episode_rebalancing_cost, inflows = model.test(cfg.model.test_episodes, env)
+    save_vehicle_distribution(env.acc, sim_time=time.strftime("%Y%m%d-%H%M%S"))
+
 
     print('Mean Episode Profit ($): ', np.mean(episode_reward))
     print('Mean Episode Served Demand- Proit($): ', np.mean(episode_served_demand))
@@ -336,6 +361,7 @@ def test(config):
     
     print(f'Testing model {cfg.model.name} on {cfg.simulator.name} environment')
     episode_reward, episode_served_demand, episode_rebalancing_cost, inflows = model.test(cfg.model.test_episodes, env)
+    save_vehicle_distribution(env.acc, timestep=0, sim_time=time.strftime("%Y%m%d-%H%M%S"))
 
     print('Mean Episode Profit ($): ', np.mean(episode_reward))
     print('Mean Episode Served Demand- Proit($): ', np.mean(episode_served_demand))
