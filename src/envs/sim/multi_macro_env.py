@@ -475,6 +475,7 @@ class Scenario:
             
 
             for item in data["demand"]:
+
                 flow_based_demand  = item["demand"] / scale 
                 # print(f"flow_based_demand: {flow_based_demand}, using demand_filter_type: {demand_filter_type}, scale: {scale}")                
                 t,o,d,v,tt,p = item["time_stamp"], item["origin"], item["destination"], flow_based_demand, item["travel_time"], item["price"]
@@ -482,8 +483,10 @@ class Scenario:
                     continue
                 if (o,d) not in self.demand_input:
                     self.demand_input[o,d],self.p[o,d],self.demandTime[o,d] = defaultdict(float), defaultdict(float),defaultdict(float)
-                    
+                # if v*demand_ratio > 1:
+                    # print(f"Demand, generated input for edge ({o},{d}) at time {t}: {v*demand_ratio}")    
                 self.demand_input[o,d][(t-self.json_start)//json_tstep] += v*demand_ratio
+
                 self.p[o,d][(t-self.json_start)//json_tstep] += p*v*demand_ratio
                 self.demandTime[o,d][(t-self.json_start)//json_tstep] += tt*v*demand_ratio/json_tstep
             
@@ -544,6 +547,8 @@ class Scenario:
                 for i,j in self.edges:                
                     if (i,j) in self.demand_input and t  in self.demand_input[i,j]:
                         demand[i,j][t] = np.random.poisson(self.demand_input[i,j][t])
+                        # if self.demand_input[i,j][t] != 0:
+                        #     print(f"Demand, generated input for edge ({i},{j}) at time {t}: {self.demand_input[i,j][t]}, {demand[i,j][t]}")
                         price[i,j][t] = self.p[i,j][t]
                     else:
                         demand[i,j][t] = 0
