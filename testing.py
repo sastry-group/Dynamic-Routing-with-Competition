@@ -80,7 +80,9 @@ def setup_multi_macro(cfg):
         tf=cfg.max_steps,
         supply_factor=supply_factor,
         firm_count=cfg.firm_count,
-        demand_filter_type = cfg.demand_filter_type
+        demand_filter_type = cfg.demand_filter_type,
+        initial_vehicle_distribution=cfg.initial_vehicle_distribution
+
     )
 
     filename = RUN_TIME + "_supply_factor_" + str(supply_factor) + "_firm_count_" + str(cfg.firm_count) + "_dm_" + str(cfg.demand_filter_type)

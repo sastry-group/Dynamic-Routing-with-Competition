@@ -29,3 +29,5 @@ agents_know_partial_demand: false
 constant_vehicle_count: true
 
 demand_filter_type: "portion" 
+
+initial_vehicle_distribution: "random"  # Options: "random", None for equal

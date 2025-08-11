@@ -372,7 +372,7 @@ class Scenario:
     def __init__(self, N1=2, N2=4, tf=60, sd=None, ninit=5, tripAttr=None, demand_input=None, demand_ratio = None,
                  trip_length_preference = 0.25, grid_travel_time = 1, fix_price=True, alpha = 0.2, json_file = None, 
                  json_hr = 9, json_tstep = 2, varying_time=False, json_regions = None, prune=False, supply_factor=1,
-                 firm_count =1, demand_filter_type = None):
+                 firm_count =1, demand_filter_type = None, initial_vehicle_distribution = None):
         # trip_length_preference: positive - more shorter trips, negative - more longer trips
         # grid_travel_time: travel time between grids
         # demand_input： list - total demand out of each region, 
@@ -403,8 +403,11 @@ class Scenario:
                 self.demandTime[i,j] = defaultdict(lambda:(abs(i//N1-j//N1) + abs(i%N1-j%N1))*grid_travel_time)
                 self.rebTime[i,j] = defaultdict(lambda:(abs(i//N1-j//N1) + abs(i%N1-j%N1))*grid_travel_time)
             
+
             for n in self.G.nodes:
                 self.G.nodes[n]['accInit'] = int(ninit)
+                # self.G.nodes[n]['accInit'] = np.random.randint(ninit - 25, ninit + 1)
+                # print(f"Number of vehicles in region {n} at the beginning: {self.G.nodes[n]['accInit']}")
             self.tf = tf
             self.demand_ratio = defaultdict(list)
             
@@ -516,15 +519,29 @@ class Scenario:
                         for t in range(0,tf+1):
                             self.rebTime[o,d][t] = max(int(round(rt/json_tstep)),1)
             
+
+            # setting the number of vehicles in each region at the beginning
             if prune:
                 for n in self.G.nodes:
                     self.G.nodes[n]['accInit'] = round(10/supply_factor)
             else: 
-                for item in data["totalAcc"]:
-                    hr, acc = item["hour"], item["acc"]
-                    if hr == json_hr+int(round(json_tstep/2*tf/60)):
-                        for n in self.G.nodes:
-                            self.G.nodes[n]['accInit'] = round(int(acc/len(self.G))/supply_factor)
+                if initial_vehicle_distribution == "random":
+                    for item in data["totalAcc"]:
+                        hr, acc = item["hour"], item["acc"]
+                        if hr == json_hr+int(round(json_tstep/2*tf/60)):
+                            for n in self.G.nodes:
+                                # self.G.nodes[n]['accInit'] = round(int(acc/len(self.G))/supply_factor)
+                                num_vehicles = round(int(acc/len(self.G)) / supply_factor)
+                                rand_num_vehicles = np.random.randint(0, num_vehicles + 1)
+                                print(f"Number of vehicles in region {n} at the beginning: {rand_num_vehicles}")
+                                self.G.nodes[n]['accInit'] = rand_num_vehicles
+                                print(self.G.nodes[n])
+                else:
+                    for item in data["totalAcc"]:
+                        hr, acc = item["hour"], item["acc"]
+                        if hr == json_hr+int(round(json_tstep/2*tf/60)):
+                            for n in self.G.nodes:
+                                self.G.nodes[n]['accInit'] = round(int(acc/len(self.G))/supply_factor)
             self.tripAttr = self.get_random_demand()
                 
         
