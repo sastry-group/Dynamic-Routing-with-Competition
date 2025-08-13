@@ -81,7 +81,8 @@ def setup_multi_macro(cfg):
         supply_factor=supply_factor,
         firm_count=cfg.firm_count,
         demand_filter_type = cfg.demand_filter_type,
-        initial_vehicle_distribution=cfg.initial_vehicle_distribution
+        initial_vehicle_distribution=cfg.initial_vehicle_distribution,
+        pricing_model=cfg.pricing_model
 
     )
 
@@ -204,7 +205,6 @@ def test_approach(cfg, env, parser, device):
     else:
         supply_factor = 1
     file_str = RUN_TIME + "_" + str(cfg.model.name) + "_supply_factor_" + str(supply_factor) + "_firm_count_" + str(cfg.simulator.firm_count) + "_dm_" + str(cfg.simulator.demand_filter_type)
-    print(env.acc)
     save_vehicle_distribution(env.acc, file_str)
 
 
