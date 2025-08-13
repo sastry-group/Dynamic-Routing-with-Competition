@@ -83,6 +83,7 @@ class ReplayData:
         return len(self.data_list)
 
     def sample_batch(self, batch_size=32):
+        # data 
         data = random.sample(self.data_list, batch_size)
  
         return Batch.from_data_list(data, follow_batch=['x_s', 'x_t']).to(self.device)
@@ -222,9 +223,9 @@ class SAC(nn.Module):
             q2_pi_targ = self.critic2_target(next_state_batch, edge_index2, a2)
             q_pi_targ = torch.min(q1_pi_targ, q2_pi_targ)
 
-            backup = reward_batch + self.gamma * (q_pi_targ - self.alpha * logp_a2)
+            backup = reward_batch + self.gamma * (q_pi_targ - self.alpha * logp_a2) #eq 12, computing targets for the Q functions 
 
-        loss_q1 = F.mse_loss(q1, backup)
+        loss_q1 = F.mse_loss(q1, backup) # getting the MSE inside the parenthesis of eq 13
         loss_q2 = F.mse_loss(q2, backup)
 
         if conservative:
@@ -307,25 +308,28 @@ class SAC(nn.Module):
             self.alpha_optimizer.step()
             self.alpha = self.log_alpha().exp()
 
-        loss_pi = (self.alpha * logp_a - q_a).mean()
+        loss_pi = (self.alpha * logp_a - q_a).mean() # step 14 update policy
         return loss_pi
 
     def update(self, data, conservative=False, only_q=False):
+
+
+        # critic update
         loss_q1, loss_q2 = self.compute_loss_q(data, conservative)
 
         self.optimizers["c1_optimizer"].zero_grad()
 
-        nn.utils.clip_grad_norm_(self.critic1.parameters(), self.clip)
-        loss_q1.backward(retain_graph=True)
-        self.optimizers["c1_optimizer"].step()
+        nn.utils.clip_grad_norm_(self.critic1.parameters(), self.clip) #making usre gradient isnt to big
+        loss_q1.backward(retain_graph=True) # computes the gradient
+        self.optimizers["c1_optimizer"].step() # step the optimizer
 
-        self.optimizers["c2_optimizer"].zero_grad()
+        self.optimizers["c2_optimizer"].zero_grad() 
         loss_q2.backward(retain_graph=True)
         nn.utils.clip_grad_norm_(self.critic2.parameters(), self.clip)
         self.optimizers["c2_optimizer"].step()
 
         # Update target networks by polyak averaging.
-        with torch.no_grad():
+        with torch.no_grad(): # step 15 
             for p, p_targ in zip(
                 self.critic1.parameters(), self.critic1_target.parameters()
             ):
@@ -336,8 +340,11 @@ class SAC(nn.Module):
             ):
                 p_targ.data.mul_(self.polyak)
                 p_targ.data.add_((1 - self.polyak) * p.data)
+
         if self.wandb is not None:
             self.wandb.log({"Q1 Loss": loss_q1.item()})
+
+        
         if not only_q:
             # Freeze Q-networks so you don't waste computational effort
             # computing gradients for them during the policy learning step.
@@ -346,10 +353,11 @@ class SAC(nn.Module):
             for p in self.critic2.parameters():
                 p.requires_grad = False
 
+            # actor update
             # one gradient descent step for policy network
             self.optimizers["a_optimizer"].zero_grad()
-            loss_pi = self.compute_loss_pi(data)
-            loss_pi.backward(retain_graph=False)
+            loss_pi = self.compute_loss_pi(data) # step 14 
+            loss_pi.backward(retain_graph=False)  # the gradient of step 14
             nn.utils.clip_grad_norm_(self.actor.parameters(), 10)
             self.optimizers["a_optimizer"].step()
 
@@ -479,6 +487,7 @@ class SAC(nn.Module):
                 self.update(data=batch, conservative=True)
 
         else:
+            # in training mode, no dataset passed
             train_episodes = cfg.model.max_episodes  # set max number of training episodes
             epochs = trange(train_episodes)  # epoch iterator
             best_reward = -np.inf  # set best reward
@@ -496,8 +505,10 @@ class SAC(nn.Module):
                 episode_rebalancing_cost = 0
                 episode_served_demand += rew
                 done = False
+                print(f"Episode {i_episode+1} | Reward: {episode_reward:.2f} | ServedDemand: {episode_served_demand:.2f} | Reb. Cost: {episode_rebalancing_cost:.2f}")
                 
                 while not done:
+                    # action per region
                     action_rl = self.select_action(obs)
                     desiredAcc = {self.env.region[i]: int(action_rl[i] * dictsum(self.env.acc, self.env.time + 1))
                         for i in range(len(self.env.region))
@@ -509,10 +520,12 @@ class SAC(nn.Module):
                         desiredAcc,
                         self.cplexpath,
                     )
+                    # print(f"Rebalancing action: {reb_action}")
 
                     new_obs, rew, done, info = self.env.step(reb_action=reb_action)
                     step += 1
                     episode_reward += rew
+                    
                     episode_served_demand += info["profit"]
                     episode_rebalancing_cost += info["rebalancing_cost"]
                     
@@ -526,6 +539,7 @@ class SAC(nn.Module):
                             self.update(data=batch, only_q=True)
                         else:
                             self.update(data=batch)
+                print(f"Episode {i_episode+1} | Reward: {episode_reward:.2f} | ServedDemand: {episode_served_demand:.2f} | Reb. Cost: {episode_rebalancing_cost:.2f}")
                 epochs.set_description(
                     f"Episode {i_episode+1} | Reward: {episode_reward:.2f} | ServedDemand: {episode_served_demand:.2f} | Reb. Cost: {episode_rebalancing_cost:.2f}"
                 )
