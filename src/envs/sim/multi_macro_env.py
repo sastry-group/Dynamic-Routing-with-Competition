@@ -10,6 +10,9 @@ import torch
 from torch_geometric.data import Data
 from pulp import LpMaximize, LpProblem, LpVariable, lpSum, LpStatus, value
 import pulp
+import os
+from datetime import datetime
+
 
 class AMoD:
     # initialization
@@ -71,6 +74,7 @@ class AMoD:
         self.obs = (self.acc, self.time, self.dacc, self.demand)
     
     def matching(self, CPLEXPATH=None, PATH='', platform = 'linux'):
+        # print(getattr(sys, 'frozen', False))
         #CPLEXPATH = 'None'
         if CPLEXPATH=='None':
             return self.matching_pulp()
@@ -116,20 +120,33 @@ class AMoD:
             paxAction = [flow[i,j] if (i,j) in flow else 0 for i,j in self.edges]
             return paxAction
 
-    def matching_pulp(self, number_of_firms=2):
+    def matching_pulp(self):
+        # print(getattr(sys, 'frozen', False))
         #region, acc_init, demand, price, demand_edges
         t = self.time
-
         acc_init = {n: self.acc[n][t+1] for n in self.acc}
-
-        agent_demand = {(i, j): self.demand[i,j][t] for ind, (i,j) in enumerate(self.demand) if t in self.demand[i,j] and self.demand[i,j][t]>1e-3 and (ind % number_of_firms == 0)}
-        # agent_demand = total_demand[::number_of_firms] if len(total_demand) > 1 else total_demand
-
-        agent_price = {(i, j): self.price[i,j][t] for ind, (i,j) in enumerate(self.price) if t in self.demand[i,j] and self.demand[i,j][t]>1e-3 and (ind % number_of_firms == 0)}
-        # agent_price = total_price[::number_of_firms] if len(total_price) > 1 else total_price
+        demand_type = self.cfg.demand_filter_type
         
-        agent_demand_edges = [(i, j) for ind, (i,j) in enumerate(self.demand) if t in self.demand[i,j] and self.demand[i,j][t]>1e-3 and (ind % number_of_firms == 0)]
-        # agent_demand_edges = total_demand_edges[::number_of_firms] if len(total_demand_edges) > 1 else total_demand_edges
+
+        # if self.cfg.demand_filter_type == 'portion':
+        if demand_type == "portion":
+            # print(f"Setting the demand to receive a portion of them")
+            # here we are taking a portion of demand requests
+            agent_demand = {(i, j): self.demand[i,j][t] for ind, (i,j) in enumerate(self.demand) if t in self.demand[i,j] and self.demand[i,j][t]>1e-3 and (ind % self.cfg.firm_count == 0)}
+            # agent_demand = total_demand[::number_of_firms] if len(total_demand) > 1 else total_demand
+            agent_price = {(i, j): self.price[i,j][t] for ind, (i,j) in enumerate(self.price) if t in self.demand[i,j] and self.demand[i,j][t]>1e-3 and (ind % self.cfg.firm_count == 0)}
+            # agent_price = total_price[::number_of_firms] if len(total_price) > 1 else total_price
+            agent_demand_edges = [(i, j) for ind, (i,j) in enumerate(self.demand) if t in self.demand[i,j] and self.demand[i,j][t]>1e-3 and (ind % self.cfg.firm_count == 0)]
+            # agent_demand_edges = total_demand_edges[::number_of_firms] if len(total_demand_edges) > 1 else total_demand_edges
+        else:
+            # here we are taking all the demand requests
+            # print(f"Setting the demand to receive all of them")
+            agent_demand = {(i, j): self.demand[i,j][t] for ind, (i,j) in enumerate(self.demand) if t in self.demand[i,j] and self.demand[i,j][t]>1e-3}
+            agent_price = {(i, j): self.price[i,j][t] for ind, (i,j) in enumerate(self.price) if t in self.demand[i,j] and self.demand[i,j][t]>1e-3}
+            agent_demand_edges = [(i, j) for ind, (i,j) in enumerate(self.demand) if t in self.demand[i,j] and self.demand[i,j][t]>1e-3]  
+
+        # print(f"agent_demand: {agent_demand}")    
+        # print(f"agent_demand_edges: {agent_demand_edges}")    
 
         region = [n for n in acc_init]
     
@@ -143,7 +160,9 @@ class AMoD:
         }
 
         # Objective function: maximize total revenue
-        model += lpSum(flow[(i, j)] * 0.9 * agent_price[(i, j)] for (i, j) in agent_demand_edges), "TotalRevenue"
+        model += lpSum(flow[(i, j)] * agent_price[(i, j)] for (i,
+                                                               
+                                                                j) in agent_demand_edges), "TotalRevenue"
 
         # Supply constraints: total flow out of each region <= initial availability
         for k in region:
@@ -187,18 +206,19 @@ class AMoD:
                 continue
             # I moved the min operator above, since we want paxFlow to be consistent with paxAction
             assert paxAction[k] < self.acc[i][t+1] + 1e-3
-            self.paxAction[k] = min(self.acc[i][t+1], paxAction[k])            
-            self.servedDemand[i,j][t] = self.paxAction[k]
-            self.paxFlow[i,j][t+self.demandTime[i,j][t]] = self.paxAction[k]
-            self.info["operating_cost"] += self.demandTime[i,j][t]*self.beta*self.paxAction[k]
-            self.acc[i][t+1] -= self.paxAction[k]
-            self.info['served_demand'] += self.servedDemand[i,j][t]            
-            self.dacc[j][t+self.demandTime[i,j][t]] += self.paxFlow[i,j][t+self.demandTime[i,j][t]]
-            self.reward += self.paxAction[k]*(self.price[i,j][t] - self.demandTime[i,j][t]*self.beta)  
-            test_rew += self.paxAction[k]*(self.price[i,j][t]) 
+            # acc - available vehicles in region, dacc - arriving vehicles in region, paxAction - number of vehicles with passengers
+            self.paxAction[k] = min(self.acc[i][t+1], paxAction[k]) # Make sure action does not exceed available vehicles            
+            self.servedDemand[i,j][t] = self.paxAction[k] # amount of demand served in this time step
+            self.paxFlow[i,j][t+self.demandTime[i,j][t]] = self.paxAction[k] # vehicles with passengers flowing region i to region j at time t+self.demandTime[i,j][t]
+            self.info["operating_cost"] += self.demandTime[i,j][t]*self.beta*self.paxAction[k] # Calculate operating cost
+            self.acc[i][t+1] -= self.paxAction[k] # How many vehicles are left in region i at time t+1
+            self.info['served_demand'] += self.servedDemand[i,j][t] # How much demand is served in this time step            
+            self.dacc[j][t+self.demandTime[i,j][t]] += self.paxFlow[i,j][t+self.demandTime[i,j][t]] # Adding in passenger vehicles to those arriving in region j at time t+self.demandTime[i,j][t]
+            self.reward += self.paxAction[k]*(self.price[i,j][t] - self.demandTime[i,j][t]*self.beta)  # reward is price - operating cost (I'm guessing price is what the passengers pay?)
+            test_rew += self.paxAction[k]*(self.price[i,j][t]) # Reward from serving passengers, so adding revenue from passengers
 
-            self.info['revenue'] += self.paxAction[k]*(self.price[i,j][t])  
-            self.info['profit'] += self.paxAction[k]*(self.price[i,j][t] - self.demandTime[i,j][t]*self.beta) 
+            self.info['revenue'] += self.paxAction[k]*(self.price[i,j][t]) # Revenue from serving passengers
+            self.info['profit'] += self.paxAction[k]*(self.price[i,j][t] - self.demandTime[i,j][t]*self.beta)  # profit is price - operating cost
 
         self.obs = (self.acc, self.time, self.dacc, self.demand) # for acc, the time index would be t+1, but for demand, the time index would be t
         done = False # if passenger matching is executed first
@@ -350,7 +370,9 @@ class AMoD:
     
 class Scenario:
     def __init__(self, N1=2, N2=4, tf=60, sd=None, ninit=5, tripAttr=None, demand_input=None, demand_ratio = None,
-                 trip_length_preference = 0.25, grid_travel_time = 1, fix_price=True, alpha = 0.2, json_file = None, json_hr = 9, json_tstep = 2, varying_time=False, json_regions = None, prune=False):
+                 trip_length_preference = 0.25, grid_travel_time = 1, fix_price=True, alpha = 0.2, json_file = None, 
+                 json_hr = 9, json_tstep = 2, varying_time=False, json_regions = None, prune=False, supply_factor=1,
+                 firm_count =1, demand_filter_type = None, initial_vehicle_distribution = None):
         # trip_length_preference: positive - more shorter trips, negative - more longer trips
         # grid_travel_time: travel time between grids
         # demand_input： list - total demand out of each region, 
@@ -381,8 +403,11 @@ class Scenario:
                 self.demandTime[i,j] = defaultdict(lambda:(abs(i//N1-j//N1) + abs(i%N1-j%N1))*grid_travel_time)
                 self.rebTime[i,j] = defaultdict(lambda:(abs(i//N1-j//N1) + abs(i%N1-j%N1))*grid_travel_time)
             
+
             for n in self.G.nodes:
                 self.G.nodes[n]['accInit'] = int(ninit)
+                # self.G.nodes[n]['accInit'] = np.random.randint(ninit - 25, ninit + 1)
+                # print(f"Number of vehicles in region {n} at the beginning: {self.G.nodes[n]['accInit']}")
             self.tf = tf
             self.demand_ratio = defaultdict(list)
             
@@ -443,14 +468,28 @@ class Scenario:
                 self.demandTime[i,j] = defaultdict(int)
                 self.rebTime[i,j] = 1
                 
-            for item in data["demand"]: 
-                t,o,d,v,tt,p = item["time_stamp"], item["origin"], item["destination"], item["demand"], item["travel_time"], item["price"]
+
+            if demand_filter_type == 'portion':
+                scale = 1
+            else:
+                scale = firm_count
+                
+
+            
+
+            for item in data["demand"]:
+
+                flow_based_demand  = item["demand"] / scale 
+                # print(f"flow_based_demand: {flow_based_demand}, using demand_filter_type: {demand_filter_type}, scale: {scale}")                
+                t,o,d,v,tt,p = item["time_stamp"], item["origin"], item["destination"], flow_based_demand, item["travel_time"], item["price"]
                 if json_regions!= None and (o not in json_regions or d not in json_regions):
                     continue
                 if (o,d) not in self.demand_input:
                     self.demand_input[o,d],self.p[o,d],self.demandTime[o,d] = defaultdict(float), defaultdict(float),defaultdict(float)
-                    
+                # if v*demand_ratio > 1:
+                    # print(f"Demand, generated input for edge ({o},{d}) at time {t}: {v*demand_ratio}")    
                 self.demand_input[o,d][(t-self.json_start)//json_tstep] += v*demand_ratio
+
                 self.p[o,d][(t-self.json_start)//json_tstep] += p*v*demand_ratio
                 self.demandTime[o,d][(t-self.json_start)//json_tstep] += tt*v*demand_ratio/json_tstep
             
@@ -480,19 +519,31 @@ class Scenario:
                         for t in range(0,tf+1):
                             self.rebTime[o,d][t] = max(int(round(rt/json_tstep)),1)
             
+
+            # setting the number of vehicles in each region at the beginning
             if prune:
                 for n in self.G.nodes:
-                    self.G.nodes[n]['accInit'] = 10
+                    self.G.nodes[n]['accInit'] = round(10/supply_factor)
             else: 
-                for item in data["totalAcc"]:
-                    hr, acc = item["hour"], item["acc"]
-                    if hr == json_hr+int(round(json_tstep/2*tf/60)):
-                        for n in self.G.nodes:
-                            self.G.nodes[n]['accInit'] = int(acc/len(self.G))
+                if initial_vehicle_distribution == "random":
+                    for item in data["totalAcc"]:
+                        hr, acc = item["hour"], item["acc"]
+                        if hr == json_hr+int(round(json_tstep/2*tf/60)):
+                            for n in self.G.nodes:
+                                # self.G.nodes[n]['accInit'] = round(int(acc/len(self.G))/supply_factor)
+                                num_vehicles = round(int(acc/len(self.G)) / supply_factor)
+                                rand_num_vehicles = np.random.randint(0, num_vehicles + 1)
+                                print(f"Number of vehicles in region {n} at the beginning: {rand_num_vehicles}")
+                                self.G.nodes[n]['accInit'] = rand_num_vehicles
+                                print(self.G.nodes[n])
+                else:
+                    for item in data["totalAcc"]:
+                        hr, acc = item["hour"], item["acc"]
+                        if hr == json_hr+int(round(json_tstep/2*tf/60)):
+                            for n in self.G.nodes:
+                                self.G.nodes[n]['accInit'] = round(int(acc/len(self.G))/supply_factor)
             self.tripAttr = self.get_random_demand()
                 
-        
-        
         
         
     def get_random_demand(self, reset = False):        
@@ -513,6 +564,8 @@ class Scenario:
                 for i,j in self.edges:                
                     if (i,j) in self.demand_input and t  in self.demand_input[i,j]:
                         demand[i,j][t] = np.random.poisson(self.demand_input[i,j][t])
+                        # if self.demand_input[i,j][t] != 0:
+                        #     print(f"Demand, generated input for edge ({i},{j}) at time {t}: {self.demand_input[i,j][t]}, {demand[i,j][t]}")
                         price[i,j][t] = self.p[i,j][t]
                     else:
                         demand[i,j][t] = 0
@@ -554,6 +607,7 @@ class Scenario:
                     tripAttr.append((i,j,t,demand[i,j][t],price[i,j][t]))
 
         return tripAttr
+    
 
 class GNNParser():
     """
@@ -570,16 +624,21 @@ class GNNParser():
                 self.data = json.load(file)
         
     def parse_obs(self, obs):
+        if self.env.cfg.agents_know_partial_demand:
+            demand_factor = self.env.cfg.firm_count
+        else:
+            demand_factor = 1
+            
         x = torch.cat((
             torch.tensor([obs[0][n][self.env.time+1]*self.s for n in self.env.region]).view(1, 1, self.env.nregion).float(), 
 
             torch.tensor([[(obs[0][n][self.env.time+1] + self.env.dacc[n][t])*self.s for n in self.env.region] \
                           for t in range(self.env.time+1, self.env.time+self.T+1)]).view(1, self.T, self.env.nregion).float(), 
 
-            torch.tensor([[sum([(self.env.scenario.demand_input[i,j][t])*(self.env.price[i,j][t])*self.s \
-                          for j in self.env.region]) for i in self.env.region] for t in range(self.env.time+1, self.env.time+self.T+1)]).view(1, self.T, self.env.nregion).float()),
-                          
-              dim=1).squeeze(0).view(1+self.T +self.T , self.env.nregion).T
+            torch.tensor([[sum([(self.env.scenario.demand_input[i,j][t]/demand_factor)*(self.env.price[i,j][t])*self.s \
+                        for j in self.env.region]) for i in self.env.region] for t in range(self.env.time+1, self.env.time+self.T+1)]).view(1, self.T, self.env.nregion).float()),
+                            
+            dim=1).squeeze(0).view(1+self.T +self.T , self.env.nregion).T
         
         if self.json_file is not None:
             edge_index = torch.vstack((torch.tensor([edge['i'] for edge in self.data["topology_graph"]]).view(1,-1), 

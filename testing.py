@@ -1,3 +1,4 @@
+from sympy import ff
 import hydra
 from omegaconf import DictConfig
 import torch
@@ -6,6 +7,13 @@ import numpy as np
 from hydra import initialize, compose
 from src.algos.registry import get_model
 import os 
+import copy
+import seaborn as sns
+import matplotlib.pyplot as plt
+import time
+from collections import defaultdict
+
+RUN_TIME = time.strftime("%Y%m%d-%H%M%S")
 
 def setup_sumo(cfg):
     from src.envs.sim.sumo_env import Scenario, AMoD, GNNParser
@@ -59,6 +67,10 @@ def setup_multi_macro(cfg):
         cfg.simulator.directory = f"{cfg.model.name}/{cfg.simulator.city}"
     cfg = cfg.simulator
     city = cfg.city
+    if cfg.constant_vehicle_count:
+        supply_factor = cfg.firm_count
+    else:
+        supply_factor = 1
     scenario = Scenario(
         json_file=f"src/envs/data/macro/scenario_{city}.json",
         demand_ratio=calibrated_params[city]["demand_ratio"],
@@ -66,8 +78,16 @@ def setup_multi_macro(cfg):
         sd=cfg.seed,
         json_tstep=calibrated_params[city]["test_tstep"],
         tf=cfg.max_steps,
+        supply_factor=supply_factor,
+        firm_count=cfg.firm_count,
+        demand_filter_type = cfg.demand_filter_type,
+        initial_vehicle_distribution=cfg.initial_vehicle_distribution
+
     )
-    env = AMoD(scenario, cfg = cfg, beta = calibrated_params[city]["beta"])
+
+    filename = RUN_TIME + "_supply_factor_" + str(supply_factor) + "_firm_count_" + str(cfg.firm_count) + "_dm_" + str(cfg.demand_filter_type)
+    save_sampled_demand(scenario.tripAttr, filename)
+    env = AMoD(scenario, cfg=cfg, beta=calibrated_params[city]["beta"])
     parser = GNNParser(env, T=cfg.time_horizon, json_file=f"src/envs/data/macro/scenario_{city}.json")
     return env, parser
 
@@ -108,6 +128,227 @@ def setup_model(cfg, env, parser, device):
                 model_kwargs[key] = value
         return model_class(**model_kwargs)
 
+def multi_test(input_config):
+    '''
+    for Colab tutorial
+    '''
+    multi_config = [{**copy.deepcopy(input_config), "model.name" : model} for model in input_config["model.name"]]
+
+    data = [{}, {}]
+    for config in multi_config:
+
+        with initialize(config_path="src/config"):
+            cfg = compose(config_name="config", overrides= [f"{key}={value}" for key, value in config.items()])  # Load the configuration
+            
+        # Import simulator module based on the configuration
+        simulator_name = cfg.simulator.name
+        if simulator_name == "sumo":
+            env, parser = setup_sumo(cfg)
+        elif simulator_name == "macro":
+            env, parser = setup_macro(cfg)
+        elif simulator_name == "multi_macro":
+            env, parser = setup_multi_macro(cfg)
+        else:
+            raise ValueError(f"Unknown simulator: {simulator_name}")
+        
+        use_cuda = not cfg.model.no_cuda and torch.cuda.is_available()
+        device = torch.device("cuda" if use_cuda else "cpu")
+
+        profit, inflows = test_approach(cfg, env, parser, device)
+        data[0][config["model.name"]], data[1][config['model.name']] = profit, inflows
+
+    control_data = get_no_control_performance(cfg, env, parser, device, use_saved_data=cfg.simulator.reuse_no_control)
+
+    plot_comparison(cfg, env, control_data, data)
+
+def save_vehicle_distribution(acc, file_str=None):
+    """
+    Save vehicle distribution across all timesteps and regions.
+    
+    Parameters:
+        acc (defaultdict): Nested dict [region][timestep] = count.
+        sim_time (str): Timestamp string for filename.
+    """
+    filename = f"saved_files/vehicle_distribution_{file_str}.json"
+    if not os.path.exists("saved_files"):
+        os.makedirs("saved_files")
+    
+    full_snapshot = defaultdict(dict)
+    for region, timestep_dict in acc.items():
+        for timestep, value in timestep_dict.items():
+            full_snapshot[str(timestep)][str(region)] = float(value)
+    
+    with open(filename, "w") as f:
+        json.dump(full_snapshot, f, indent=2)
+
+    print(f"Saved full vehicle distribution to {filename}")
+
+def save_sampled_demand(tripAttr, filename=None):
+    # save the sampled demand to a file
+
+    
+    if not os.path.exists('saved_files'):
+        os.makedirs('saved_files')
+    with open(f'saved_files/sample_demand_{filename}.json', 'w') as f:
+        print(f'Saving sampled demand to saved_files/sample_demand_{filename}.json')
+        json.dump(tripAttr, f, indent=4)
+        
+def test_approach(cfg, env, parser, device):
+    model = setup_model(cfg, env, parser, device)
+    
+    print(f'Testing model {cfg.model.name} on {cfg.simulator.name} environment')
+  
+    episode_reward, episode_served_demand, episode_rebalancing_cost, inflows = model.test(cfg.model.test_episodes, env)
+    if cfg.simulator.constant_vehicle_count:
+        supply_factor = cfg.simulator.firm_count
+    else:
+        supply_factor = 1
+    file_str = RUN_TIME + "_" + str(cfg.model.name) + "_supply_factor_" + str(supply_factor) + "_firm_count_" + str(cfg.simulator.firm_count) + "_dm_" + str(cfg.simulator.demand_filter_type)
+    print(env.acc)
+    save_vehicle_distribution(env.acc, file_str)
+
+
+    print('Mean Episode Profit ($): ', np.mean(episode_reward))
+    print('Mean Episode Served Demand- Proit($): ', np.mean(episode_served_demand))
+    print('Mean Episode Rebalancing Cost($): ', np.mean(episode_rebalancing_cost))
+
+    inflows = np.mean(inflows, axis=0)
+
+    mean_reward = np.mean(episode_reward)
+    mean_served_demand = np.mean(episode_served_demand)
+    mean_rebalancing_cost = np.mean(episode_rebalancing_cost)
+
+    mean_reward = round(mean_reward/1000,2)
+    mean_served_demand = round(mean_served_demand/1000,2)
+    mean_rebalancing_cost = round(mean_rebalancing_cost/1000,2)
+    rl_means = (mean_reward, mean_served_demand, mean_rebalancing_cost)
+
+    return rl_means, inflows
+    
+
+def get_no_control_performance(cfg, env, parser, device, use_saved_data=False):
+    #check if no_control performance is saved
+    path = f'./src/envs/data/{cfg.simulator.name}/{cfg.simulator.city}_no_control_performance.json'
+    #check if path exists
+    if os.path.exists(path) and use_saved_data:
+        with open(path, 'r') as f:
+            no_control_performance = json.load(f)
+        no_reb_reward = no_control_performance['reward']
+        no_reb_demand = no_control_performance['served_demand']
+        no_reb_cost = no_control_performance['rebalancing_cost']
+    else:
+        print('No control performance not found. Calculating (this happens only the first time on a new environment)...')
+        cfg_copy = cfg.copy()
+        cfg_copy.model.name = 'no_rebalancing'
+        model = setup_model(cfg_copy, env, parser, device)
+        no_reb_reward, no_reb_demand, no_reb_cost, _ = model.test(10, env)
+        no_reb_reward = round(np.mean(no_reb_reward)/1000,2)
+        no_reb_demand = round(np.mean(no_reb_demand)/1000,2)
+        no_reb_cost = round(np.mean(no_reb_cost)/1000,2)
+        no_control_performance = {'reward': no_reb_reward, 'served_demand': no_reb_demand, 'rebalancing_cost': no_reb_cost}
+        print(f'No control performance calculated. Saving in {path}...')
+        print(os.getcwd())
+        with open(path, 'w') as f:
+            json.dump(no_control_performance, f)
+    
+    return (no_reb_reward, no_reb_demand, no_reb_cost)
+    
+
+def plot_comparison(cfg, env, control_data, comparison_data):
+    # Function to add value labels on top of bars
+    def add_value_labels(rects):
+        for rect in rects:
+            height = rect.get_height()
+            ax1.annotate(f'{height:.1f}',
+                        xy=(rect.get_x() + rect.get_width() / 2, height),
+                        xytext=(0, 3),  # 3 points vertical offset
+                        textcoords="offset points",
+                        ha='center', va='bottom')
+
+    profit_data, inflows = comparison_data
+    labels = ['Overall Profit', 'Served Demand Profit', 'Rebalancing Cost']
+    x = np.arange(len(labels))  # the label locations
+    width = 0.15  # the width of the bars
+    num_bars = len(profit_data) + 1
+
+    fig, (ax1, ax2) = plt.subplots(nrows=1, ncols=2, figsize=(15, 5))
+    
+    #fig, ax = plt.subplots(figsize=(8, 5))
+
+    colors = sns.color_palette("hsv", len(profit_data) + 1)
+    start_x = x - (num_bars-1)*width/2 
+    for ind, (key, data) in enumerate(profit_data.items()):
+        rects1 = ax1.bar(start_x + ind*width, data, width, label=key, color=colors[ind])
+        add_value_labels(rects1) # Adding value labels to each bar
+    rects2 = ax1.bar(start_x + (ind+1)*width, control_data, width, label='No Control', color=colors[-1])
+    add_value_labels(rects2)
+
+    # Add some text for labels, title and custom x-axis tick labels, etc.
+    ax1.set_xlabel('Metrics')
+    ax1.set_ylabel('$, x10^3')
+    if cfg.simulator.firm_count == 1:
+        ax1.set_title(f'Comparison on {cfg.simulator.city} Environment with 1 Firm')
+    else:
+        ax1.set_title(f'Comparison on {cfg.simulator.city} Environment with {cfg.simulator.firm_count} Firms')
+    ax1.set_xticks(x)
+    ax1.set_xticklabels(labels)
+    ax1.legend()
+
+    #plt.tight_layout()
+    plt.grid(True, axis='y', linestyle='--', alpha=0.7)
+
+    if cfg.simulator.city != 'nyc_brooklyn': 
+        plt.show()
+    else: 
+        #plots for tutorial
+        open_reqest = {0: 0,
+            1: 414.0,
+            2: 0,
+            3: 0,
+            4: 0,
+            5: 49756.49999999998,
+            6: 9948.600000000006,
+            7: 98.99999999999999,
+            8: 198.00000000000003,
+            9: 881.9999999999998,
+            10: 1232.9999999999993,
+            11: 6492.600000000001,
+            12: 23293.80000000004,
+            13: 170.99999999999997}
+        
+        #open_reqest = {k: v / max(open_reqest.values()) for k,v in open_reqest.items()}
+
+        #inflows = inflows / max(inflows)
+
+        labels = range(14)
+        x = np.arange(len(labels))  # the label locations
+        width = 0.25  # the width of the bars
+
+        r1 = np.arange(14)
+        r2 = [x + width for x in r1]
+
+        #fig, ax = plt.subplots(figsize=(8, 5))
+        for key, data in inflows.items():
+            ax2.bar(r2, data, width, label=f'Rebalancing Flows for {key}', color="#0072BD")
+        ax3 = ax2.twinx()  # Create a second y-axis
+        ax3.bar(r1, open_reqest.values(), width, label='Profit', color="#A2142F")
+
+        # Add labels and title to the second plot
+        ax2.set_xlabel('Regions')
+        ax2.set_ylabel('Flows', color="#0072BD")
+        ax3.set_ylabel('Profit', color="#A2142F")
+        ax2.set_title('Comparison of Incoming Rebalancing Flows vs Profit')
+        ax2.set_xticks(r1)
+        ax2.set_xticklabels(labels)
+        ax2.tick_params(axis='y', labelcolor="#0072BD")
+        ax3.tick_params(axis='y', labelcolor="#A2142F")
+        #ax2.legend()
+        #ax3.legend()
+
+        plt.tight_layout()  
+        plt.show()
+
+
 def test(config):
     '''
     for Colab tutorial
@@ -133,6 +374,7 @@ def test(config):
     
     print(f'Testing model {cfg.model.name} on {cfg.simulator.name} environment')
     episode_reward, episode_served_demand, episode_rebalancing_cost, inflows = model.test(cfg.model.test_episodes, env)
+    # save_vehicle_distribution(env.acc, timestep=0, sim_time=time.strftime("%Y%m%d-%H%M%S"))
 
     print('Mean Episode Profit ($): ', np.mean(episode_reward))
     print('Mean Episode Served Demand- Proit($): ', np.mean(episode_served_demand))
@@ -153,7 +395,7 @@ def test(config):
         print('No control performance not found. Calculating (this happens only the first time on a new environment)...')
         cfg_copy = cfg.copy()
         cfg_copy.model.name = 'no_rebalancing'
-        model = setup_model(cfg, env, parser, device)
+        model = setup_model(cfg_copy, env, parser, device)
         no_reb_reward, no_reb_demand, no_reb_cost, _ = model.test(10, env)
         no_reb_reward = round(np.mean(no_reb_reward)/1000,2)
         no_reb_demand = round(np.mean(no_reb_demand)/1000,2)

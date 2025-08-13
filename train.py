@@ -49,6 +49,38 @@ def setup_macro(cfg):
     parser = GNNParser(env, T=cfg.time_horizon, json_file=f"src/envs/data/macro/scenario_{city}.json")
     return env, parser
 
+def setup_multi_macro(cfg):
+    from src.envs.sim.multi_macro_env import Scenario, AMoD, GNNParser
+    with open("src/envs/data/multi_macro/calibrated_parameters.json", "r") as file:
+        calibrated_params = json.load(file)
+    
+    cfg.simulator.cplexpath = cfg.model.cplexpath
+
+    cfg = cfg.simulator
+    city = cfg.city
+    
+     
+    if cfg.constant_vehicle_count:
+        supply_factor = cfg.firm_count
+    else:
+        supply_factor = 1
+    # demand_filter_type = cfg.demand_filter_type
+    scenario = Scenario(
+        json_file=f"src/envs/data/multi_macro/scenario_{city}.json",
+        demand_ratio=calibrated_params[city]["demand_ratio"],
+        json_hr=calibrated_params[city]["json_hr"],
+        sd=cfg.seed,
+        json_tstep=calibrated_params[city]["test_tstep"],
+        tf=cfg.max_steps,
+        supply_factor=supply_factor,
+        firm_count=cfg.firm_count,
+        demand_filter_type = cfg.demand_filter_type
+    )
+    env = AMoD(scenario, cfg = cfg, beta = calibrated_params[city]["beta"])
+    parser = GNNParser(env, T=cfg.time_horizon, json_file=f"src/envs/data/multi_macro/scenario_{city}.json")
+    return env, parser
+
+
 def setup_model(cfg, env, parser, device):
     model_name = cfg.model.name
     cfg = cfg.model
@@ -66,6 +98,8 @@ def setup_model(cfg, env, parser, device):
         return BC(env=env, input_size=cfg.input_size,cfg=cfg, parser=parser, device=device).to(device)
     else:
         raise ValueError(f"Unknown model or baseline: {model_name}")
+    
+    
 
 def setup_dataset(cfg, env, device):
     from src.algos.sac import ReplayData
@@ -80,6 +114,17 @@ def setup_dataset(cfg, env, device):
                     destination.append(d)
 
         edge_index = torch.cat([torch.tensor([origin]), torch.tensor([destination])])
+
+    elif cfg.simulator.name == "multi_macro":
+        with open(f"src/envs/data/multi_macro/scenario_{cfg.simulator.city}.json", "r") as file:
+            data = json.load(file)
+
+        edge_index = torch.vstack(
+            (
+                torch.tensor([edge["i"] for edge in data["topology_graph"]]).view(1, -1),
+                torch.tensor([edge["j"] for edge in data["topology_graph"]]).view(1, -1),
+            )
+        ).long()
 
     else: 
         with open(f"src/envs/data/macro/scenario_{cfg.simulator.city}.json", "r") as file:
@@ -114,6 +159,9 @@ def train(config):
         env, parser = setup_sumo(cfg)
     elif cfg.simulator.name == "macro":
         env, parser = setup_macro(cfg)
+    elif cfg.simulator.name == "multi_macro":
+        env, parser = setup_multi_macro(cfg)
+
     else:
         raise ValueError(f"Unknown simulator: {cfg.simulator.name}")
     
@@ -156,6 +204,8 @@ def main(cfg: DictConfig):
 
     elif simulator_name == "macro":
         env, parser = setup_macro(cfg)
+    elif simulator_name == "multi_macro":
+        env, parser = setup_multi_macro(cfg)
     else:
         raise ValueError(f"Unknown simulator: {simulator_name}")
 
