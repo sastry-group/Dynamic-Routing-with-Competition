@@ -390,7 +390,7 @@ class AMoD:
         # model: "cournot", "bertrand", "exogenous"
         if pricing_model == "cournot":
             # test for now, we could use historical demand-price
-            supply = self.acc[i][t+1] + self.dacc[i,j][t+1] # total supply at time t+1
+            supply = self.acc[i][t+1] + self.dacc[i,j][t+1] # total supply at time t+1 # CHECK
             q_total = supply * self.firm_count # supply, number of initial vehicles (constant right now)
             a = p 
             b = 0.1  # slope 
