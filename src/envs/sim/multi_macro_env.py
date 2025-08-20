@@ -390,10 +390,10 @@ class AMoD:
         # model: "cournot", "bertrand", "exogenous"
         if pricing_model == "cournot":
             # test for now, we could use historical demand-price
-            supply = self.acc[i][t+1] + self.dacc[i,j][t+1] # total supply at time t+1 # CHECK
+            supply = self.acc[i][t]  # total supply at time t+1 # CHECK
             q_total = supply * self.firm_count # supply, number of initial vehicles (constant right now)
-            a = p 
-            b = 0.1  # slope 
+            a = 2*p 
+            b = 0.1  # slope  # match the overleaf
             cournot_price = max(0.0, a - b * q_total)
             # print(supply, q_total, p) # or current planned quantity
             # print(f"Cournot price for edge ({i},{j}) at time {t}: {cournot_price}, and p,q: {p}, {q_total}")
