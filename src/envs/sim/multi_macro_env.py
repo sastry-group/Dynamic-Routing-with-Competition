@@ -434,7 +434,7 @@ class Fleet:
         # Compute price if needed
         if not fixed_price:
             # print("Price needs to be computed")
-            agent_demand = {}, agent_price = {}, agent_demand_edges = []
+            agent_demand, agent_price, agent_demand_edges = {}, {}, []
             for ind, (i,j) in enumerate(demand):
                 if t in demand[i,j] and demand[i,j][t]>1e-3:
                     agent_demand[(i,j)] = demand[i,j][t]
