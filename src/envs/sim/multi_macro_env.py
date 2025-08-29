@@ -12,6 +12,7 @@ from pulp import LpMaximize, LpProblem, LpVariable, lpSum, LpStatus, value
 import pulp
 import os
 from datetime import datetime
+import math
 
 
 class AMoD:
@@ -34,6 +35,8 @@ class AMoD:
         for i in self.region:
             self.depDemand[i] = defaultdict(float)
             self.arrDemand[i] = defaultdict(float)
+
+        self.total_acc = defaultdict(dict) # total number of vehicles within each region, key: i - region, t - time
             
         self.price = defaultdict(dict) # price
         self.pricing_model = cfg.pricing_model # pricing model, e.g. "cournot", "bertrand", "exogenous"
@@ -78,6 +81,7 @@ class AMoD:
         self.reward = 0
         # observation: current vehicle distribution, time, future arrivals, demand        
         self.obs = (self.acc, self.time, self.dacc, self.demand)
+        self.total_acc = defaultdict(float)
     
     def matching(self, CPLEXPATH=None, PATH='', platform = 'linux'):
         # print(getattr(sys, 'frozen', False))
@@ -288,22 +292,47 @@ class AMoD:
     def step(self, reb_action):
         # transform sample from Dirichlet into actual vehicle counts (i.e. (x1*x2*..*xn)*num_vehicles)
         # Take action in environment
-        rew = 0
-        info = {}
-        info['rebalancing_cost'] = 0 
-        info['profit'] = 0
-        obs, rebreward, done, _ = self.reb_step(reb_action)
-        info['rebalancing_cost'] = -rebreward
-        rew += rebreward 
+        firm_rebobs, firm_rebreward, firm_rebdone, = [], [], []
+        for firm in self.firms:
+            obs, rebreward, done, _ = firm.reb_step()
+            firm_rebobs.append(obs)
+            firm_rebreward.append(rebreward)
+            firm_rebdone.append(done)
 
-        #if done: 
-        #    return obs, rew, done, info
+        for n in self.G.nodes:
+            self.total_acc[n] = sum([firm.acc[n] for firm in self.firms])
 
-        obs, paxreward, done, _ = self.pax_step(CPLEXPATH=self.cfg.cplexpath, PATH=self.cfg.directory)
-        info['profit'] = paxreward
-        rew += paxreward
-        done = (self.tf == self.time+1) # if the episode is completed
-        return obs, rew, done, info
+
+        prices = [{edge: firm.compute_price(self.total_acc[edge[0]]) for edge in self.G.edges} for firm in self.firms]
+
+        demands = [defaultdict(float) for _ in range(self.firm_count)]
+        for edge in self.G.edges:
+            for ind in range(self.firm_count):
+                demands[ind][edge] = self.demand[edge][self.time] * math.exp(-0.5*prices[ind][edge]) / sum([math.exp(-0.5*prices[j][edge]) for j in range(self.firm_count)])
+
+        firm_paxobs, firm_paxreward, firm_paxdone = [], [], []
+        for firm in self.firms:
+            obs, paxreward, done, _ = firm.pax_step(self.total_acc)
+            firm_paxobs.append(obs)
+            firm_paxreward.append(paxreward)
+            firm_paxdone.append(done)
+
+        # rew = 0
+        # info = {}
+        # info['rebalancing_cost'] = 0 
+        # info['profit'] = 0
+        # obs, rebreward, done, _ = self.reb_step(reb_action)
+        # info['rebalancing_cost'] = -rebreward
+        # rew += rebreward 
+
+        # #if done: 
+        # #    return obs, rew, done, info
+
+        # obs, paxreward, done, _ = self.pax_step(CPLEXPATH=self.cfg.cplexpath, PATH=self.cfg.directory)
+        # info['profit'] = paxreward
+        # rew += paxreward
+        # done = (self.tf == self.time+1) # if the episode is completed
+        # return obs, rew, done, info
     
     def reset(self):
         # reset the episode
