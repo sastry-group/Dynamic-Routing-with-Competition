@@ -692,36 +692,64 @@ class Fleet:
     def reb_step(self, rebAction):
         info = dict.fromkeys(['served_demand', 'revenue', 'rebalancing_cost', 'operating_cost', 'profit'], 0)
         t = self.time
-        reward = 0 # reward is calculated from before this to the next rebalancing, we may also have two rewards, one for pax matching and one for rebalancing
-        self.rebAction = rebAction      
-        # rebalancing
-        for k, (i,j) in enumerate(self.edges):
-            if (i,j) not in self.G.edges:
-                continue
-            # TODO: add check for actions respecting constraints? e.g. sum of all action[k] starting in "i" <= self.acc[i][t+1] (in addition to our agent action method)
-            # update the number of vehicles
-            rebased = min(self.acc[i][t+1], rebAction[k])
 
-            # self.rebFlow[i,j][t+self.rebTime[i,j][t]] = rebased       
-            self.acc[i][t+1] -= rebased
-            self.acc[j][t+self.rebTime[i,j][t]+1] += rebased
-            self.dacc[j][t+self.rebTime[i,j][t]] += rebased
-            info['rebalancing_cost'] += self.rebTime[i,j][t]*self.beta*rebased
-            info["operating_cost"] += self.rebTime[i,j][t]*self.beta*rebased
-            reward -= self.rebTime[i,j][t]*self.beta*rebased
-        # arrival for the next time step, executed in the last state of a time step
-        # this makes the code slightly different from the previous version, where the following codes are executed between matching and rebalancing        
-        # for k, (i,j) in enumerate(self.rebFlow):
-        #     if t in self.rebFlow[i,j]:
-        #         self.acc[j][t+1] += self.rebFlow[i,j][t]
-            
-        self.time += 1
-        obs = (self.acc, self.time, self.dacc, None) # use self.time to index the next time step
-        for i,j in self.G.edges:
-            self.G.edges[i,j]['time'] = self.rebTime[i,j][self.time] #?
-        #done = (self.tf == t+1) # if the episode is completed
-        done = False
-        return obs, reward, done, info
+        if getattr(self.cfg, "demand_filter_type", None) == "competition":
+            # rebAction expected as dict: {m: list-aligned-with-self.edges}, or give zeros if you’re not using it yet
+            info = dict.fromkeys(['served_demand','revenue','rebalancing_cost','operating_cost','profit'], 0.0)
+            total_reward = 0.0
+
+            for m in range(self.firm_count):
+                self.firms[m].time = t
+                actions_m = (rebAction.get(m) if isinstance(rebAction, dict) else None) or [0.0]*len(self.edges)
+                obs_m, rew_m, done_m, info_m = self.firms[m].reb_step(actions_m)
+                # accumulate costs (rebalancing is negative reward)
+                info['rebalancing_cost'] += float(info_m.get('rebalancing_cost', 0.0))
+                info['operating_cost']   += float(info_m.get('operating_cost', 0.0))
+                total_reward             += float(rew_m)
+
+            # rebuild a global availability view at t+1 by summing firms
+            for i in self.region:
+                self.acc[i][t+1] = sum(self.firms[m].acc[i].get(t+1, 0.0) for m in range(self.firm_count))
+
+            self.time = t + 1
+            self.obs = (self.acc, self.time, self.dacc, self.demand)
+            for (i,j) in self.G.edges:
+                self.G.edges[i,j]['time'] = self.rebTime[i,j][self.time]
+            return self.obs, total_reward, False, info
+
+
+        else:
+
+            reward = 0 # reward is calculated from before this to the next rebalancing, we may also have two rewards, one for pax matching and one for rebalancing
+            self.rebAction = rebAction      
+            # rebalancing
+            for k, (i,j) in enumerate(self.edges):
+                if (i,j) not in self.G.edges:
+                    continue
+                # TODO: add check for actions respecting constraints? e.g. sum of all action[k] starting in "i" <= self.acc[i][t+1] (in addition to our agent action method)
+                # update the number of vehicles
+                rebased = min(self.acc[i][t+1], rebAction[k])
+
+                # self.rebFlow[i,j][t+self.rebTime[i,j][t]] = rebased       
+                self.acc[i][t+1] -= rebased
+                self.acc[j][t+self.rebTime[i,j][t]+1] += rebased
+                self.dacc[j][t+self.rebTime[i,j][t]] += rebased
+                info['rebalancing_cost'] += self.rebTime[i,j][t]*self.beta*rebased
+                info["operating_cost"] += self.rebTime[i,j][t]*self.beta*rebased
+                reward -= self.rebTime[i,j][t]*self.beta*rebased
+            # arrival for the next time step, executed in the last state of a time step
+            # this makes the code slightly different from the previous version, where the following codes are executed between matching and rebalancing        
+            # for k, (i,j) in enumerate(self.rebFlow):
+            #     if t in self.rebFlow[i,j]:
+            #         self.acc[j][t+1] += self.rebFlow[i,j][t]
+                
+            self.time += 1
+            obs = (self.acc, self.time, self.dacc, None) # use self.time to index the next time step
+            for i,j in self.G.edges:
+                self.G.edges[i,j]['time'] = self.rebTime[i,j][self.time] #?
+            #done = (self.tf == t+1) # if the episode is completed
+            done = False
+            return obs, reward, done, info
     
     def reset(self,):
         # Reset the fleet state
