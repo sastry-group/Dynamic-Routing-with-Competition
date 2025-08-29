@@ -286,13 +286,14 @@ class AMoD:
 
                     p_m = {m: self.compute_price(i, j, t, base_p, total_supply_i, self.pricing_model) for m in range(self.firm_count)}
 
-                    beta_d = self.beta ## check, same beta?
+                    beta_d = 0.5 ## check, same beta?
                     weights = {m: math.exp(-beta_d * p_m[m]) for m in range(self.firm_count)}
                     denom = sum(weights.values()) or 1.0
 
                     for m in range(self.firm_count):
                         price_f[m][(i,j)][t]  = p_m[m]
-                        demand_f[m][(i,j)][t] = total_d * (weights[m] / denom)
+                        # demand_f[m][(i,j)][t] = total_d * (weights[m] / denom)
+                        demand_f[m][(i,j)][t] = self.demand[i,j][t] 
 
             # Reset step-level info (aggregates)
             self.info['served_demand']  = 0.0
@@ -372,7 +373,7 @@ class AMoD:
         self.info['served_demand'] = 0 # initialize served demand
         self.info["operating_cost"] = 0 # initialize operating cost
         self.info['revenue'] = 0
-        self.info['rebalancing_cost'] = 0#
+        self.info['rebalancing_cost'] = 0 #
         self.info['profit'] = 0
         t = self.time
         self.reward = 0 # reward is calculated from before this to the next rebalancing, we may also have two rewards, one for pax matching and one for rebalancing
@@ -512,6 +513,7 @@ class AMoD:
     def compute_price(self, i, j, t, base_price, total_supply, pricing_model):
         # print(pricing_model)
         # model: "cournot", "bertrand", "exogenous"
+        pricing_model = None
         if pricing_model == "cournot":
             try:
                 q_total = sum(self.firms[f].acc[i][t] for f in range(self.firm_count))
@@ -522,7 +524,7 @@ class AMoD:
 
             # supply, number of initial vehicles (constant right now)
             # chekcing the q_total with total_Supplu
-            a = 2* base_price 
+            a = base_price 
             alpha = 0.1
             b = alpha * a * (1 / total_supply)
             cournot_price = a - b * total_supply
