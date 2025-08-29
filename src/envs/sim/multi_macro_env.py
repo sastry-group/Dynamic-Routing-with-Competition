@@ -29,7 +29,7 @@ class AMoD:
         self.region = list(self.G) # set of regions
         self.cfg = cfg 
         self.firm_count = cfg.firm_count # number of firms
-        self.firms = [Fleet(scenario, beta=beta) for _ in range(self.firm_count)]
+        self.firms = [Fleet(scenario, cfg, beta=beta) for _ in range(self.firm_count)]
         # self.pricing_model = cfg.pricing_model # pricing model, e.g. "cournot", "bertrand", "exogenous"   
         for i in self.region:
             self.depDemand[i] = defaultdict(float)
@@ -83,7 +83,7 @@ class AMoD:
         # print(getattr(sys, 'frozen', False))
         #CPLEXPATH = 'None'
         if CPLEXPATH=='None':
-            return self.matching_pulp()
+            return self.firms[0].matching(self.demand, self.price, fixed_price=True)
         else:
             t = self.time
             demandAttr = [(i,j,self.demand[i,j][t], self.price[i,j][t]) for i,j in self.demand \
@@ -407,7 +407,7 @@ class AMoD:
 
 
 class Fleet:
-    def __init__(self, scenario, beta=0.2):
+    def __init__(self, scenario, cfg, beta=0.2):
         self.beta = beta
 
         self.G = scenario.G
@@ -425,6 +425,8 @@ class Fleet:
         # for i,j in FIX
         #     self.paxFlow[i,j] = defaultdict(float) 
         self.pricing_model = "cournot"
+        self.firm_count = cfg.firm_count
+        self.time = 0
 
     def matching(self, demand, price, fixed_price=True):
         # TODO: Remove t and just directly pass demand for this timestep
@@ -476,6 +478,7 @@ class Fleet:
         # Solve the optimization problem
         status = model.solve(pulp.PULP_CBC_CMD(msg=False, options=["primalTol=1e-10", "dualTol=1e-10", "mipGap=1e-10"]))
 
+        self.time += 1
         # Output the results
         if LpStatus[status] == "Optimal":
             flow = {(i, j): value(flow[(i, j)]) for (i, j) in agent_demand_edges}
