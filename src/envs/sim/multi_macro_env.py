@@ -282,7 +282,7 @@ class AMoD:
                     for m in range(self.firm_count):
                         # keep firm time consistent with env
                         self.firms[m].time = t
-                        total_supply_i += float(self.firms[m].acc[i].get(t+1, self.firms[m].acc[i].get(t, 0.0))) # for solver apparently, but i know is int
+                        total_supply_i += self.firms[m].acc[i].get(t) 
 
                     p_m = {m: self.compute_price(i, j, t, base_p, total_supply_i, self.pricing_model) for m in range(self.firm_count)}
 
@@ -547,8 +547,10 @@ class Fleet:
         self.regions = list(self.G) # set of regions
         # self.t = 0 # current time
         self.time = 0 # why t?
-        self.acc = defaultdict(dict) # number of vehicles within each region, key: i - region, t - time
-        self.dacc = defaultdict(dict) # number of vehicles arriving at each region, key: i - region, t - time
+        # self.acc = defaultdict(dict) # number of vehicles within each region, key: i - region, t - time
+        # self.dacc = defaultdict(dict) # number of vehicles arriving at each region, key: i - region, t - time
+        self.acc  = defaultdict(lambda: defaultdict(float))
+        self.dacc = defaultdict(lambda: defaultdict(float))
         # self.paxFlow = defaultdict(dict)
         self.edges = []
         for i in self.G:
@@ -671,18 +673,20 @@ class Fleet:
             # Vehicles arriving to region j at t+travelTime[i,j][t] are available at the following time step
             self.acc[j][t+travelTime[i,j][t]+1] += pax_served
             self.dacc[j][t+travelTime[i,j][t]] += pax_served # Adding in passenger vehicles to those arriving in region j at time t+self.demandTime[i,j][t]
-            
-            profit = pax_served*(self.price[i,j][t] - travelTime[i,j][t]*self.beta) # profit is price - operating cost
+            # profit = pax_served*(self.price[i,j][t] - travelTime[i,j][t]*self.beta)
+            profit = pax_served*(price[i,j][t] - travelTime[i,j][t]*self.beta) # profit is price - operating cost
 
             info["operating_cost"] += travelTime[i,j][t]*self.beta*pax_served
             info['served_demand'] += pax_served
-            info['revenue'] += pax_served*self.price[i,j][t]
+            # info['revenue'] += pax_served * self.price[i,j][t]
+            info['revenue'] += pax_served * price[i,j][t]
             info['profit'] += profit
             info['reward'] += profit
 
-        for k, (i,j) in enumerate(self.paxFlow):
-            if t in self.paxFlow[i,j]:
-                self.acc[j][t+1] += self.paxFlow[i,j][t]
+        # double check but i am writing this future flow earlier
+        # for k, (i,j) in enumerate(self.paxFlow):
+        #     if t in self.paxFlow[i,j]:
+        #         self.acc[j][t+1] += self.paxFlow[i,j][t]
 
         obs = (self.acc, self.time, self.dacc, demand) # for acc, the time index would be t+1, but for demand, the time index would be t
         done = False # if passenger matching is executed first

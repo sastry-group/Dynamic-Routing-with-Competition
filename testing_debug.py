@@ -22,7 +22,7 @@ config = {
     "simulator.firm_count": 2,
     "simulator.agents_know_partial_demand": True,
     "simulator.constant_vehicle_count": True,
-    # "simulator.demand_filter_type": "competition" ,
+    "simulator.demand_filter_type": "competition" ,
     "simulator.pricing_model": "cournot"
 
 }
