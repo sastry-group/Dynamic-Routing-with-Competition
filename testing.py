@@ -81,7 +81,7 @@ def setup_multi_macro(cfg):
         supply_factor=supply_factor,
         firm_count=cfg.firm_count,
         demand_filter_type = cfg.demand_filter_type,
-        initial_vehicle_distribution=cfg.initial_vehicle_distribution,
+        initial_vehicle_distribution_method=cfg.initial_vehicle_distribution_method,
         pricing_model=cfg.pricing_model
 
     )
@@ -191,13 +191,15 @@ def save_sampled_demand(tripAttr, filename=None):
     if not os.path.exists('saved_files'):
         os.makedirs('saved_files')
     with open(f'saved_files/sample_demand_{filename}.json', 'w') as f:
-        print(f'Saving sampled demand to saved_files/sample_demand_{filename}.json')
+        # print(f'Saving sampled demand to saved_files/sample_demand_{filename}.json')
         json.dump(tripAttr, f, indent=4)
         
 def test_approach(cfg, env, parser, device):
     model = setup_model(cfg, env, parser, device)
     
     print(f'Testing model {cfg.model.name} on {cfg.simulator.name} environment')
+    print(f"Using price model: {cfg.simulator.pricing_model}")
+    print(f"Using initial vehicle distribution: {cfg.simulator.initial_vehicle_distribution_method}")
   
     episode_reward, episode_served_demand, episode_rebalancing_cost, inflows = model.test(cfg.model.test_episodes, env)
     if cfg.simulator.constant_vehicle_count:
@@ -346,7 +348,10 @@ def plot_comparison(cfg, env, control_data, comparison_data):
         #ax3.legend()
 
         plt.tight_layout()  
+
+        plt.savefig(f'figures/outcome_{RUN_TIME}.png', facecolor="white", edgecolor="white")
         plt.show()
+        
 
 
 def test(config):

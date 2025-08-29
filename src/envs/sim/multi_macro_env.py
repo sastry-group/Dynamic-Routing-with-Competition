@@ -12,6 +12,7 @@ from pulp import LpMaximize, LpProblem, LpVariable, lpSum, LpStatus, value
 import pulp
 import os
 from datetime import datetime
+import math
 
 
 class AMoD:
@@ -28,8 +29,56 @@ class AMoD:
         self.arrDemand = dict()
         self.region = list(self.G) # set of regions
         self.cfg = cfg 
+        self.pricing_model = cfg.pricing_model # pricing model, e.g. "cournot", "bertrand", "exogenous"
         self.firm_count = cfg.firm_count # number of firms
-        self.firms = [Fleet(scenario, beta=beta) for _ in range(self.firm_count)]
+        self.initial_vehicle_distribution = {f: {} for f in range(self.firm_count)}
+        # self.firms = [Fleet(scenario, beta=beta) for _ in range(self.firm_count)]
+
+        # assigning initial vehicle distribution per firm
+        mode = getattr(self.cfg, "initial_vehicle_distribution", "equal")  # "equal" | "random" | None
+        rng = np.random.default_rng(getattr(self.cfg, "seed", None))
+
+        for n in self.G.nodes:
+            total_vehicles_in_node = int(self.G.nodes[n]['accInit'])
+
+            if mode == "equal":
+                base = total_vehicles_in_node // self.firm_count
+                rem  = total_vehicles_in_node - base * self.firm_count
+                for f in range(self.firm_count):
+                    self.initial_vehicle_distribution[f][n] = base + (1 if f < rem else 0)
+
+            elif mode == "random":
+                if total_vehicles_in_node == 0:
+                    for f in range(self.firm_count):
+                        self.initial_vehicle_distribution[f][n] = 0
+                else:
+                    shares = rng.dirichlet(np.ones(self.firm_count))
+                    raw = np.floor(shares * total_vehicles_in_node).astype(int)
+                    while raw.sum() < total_vehicles_in_node:
+                        raw[rng.integers(0, self.firm_count)] += 1
+                    for f in range(self.firm_count):
+                        self.initial_vehicle_distribution[f][n] = int(raw[f])
+
+            else:
+                # default: put all vehicles on firm 0 (or choose your own default)
+                for f in range(self.firm_count):
+                    self.initial_vehicle_distribution[f][n] = total_vehicles_in_node if f == 0 else 0
+
+
+        for n in self.G.nodes:
+            assert sum(self.initial_vehicle_distribution[f][n] for f in range(self.firm_count)) == int(self.G.nodes[n]['accInit'])
+
+
+        self.firms = [Fleet(
+                            scenario,
+                            beta=beta,
+                            firm_id=f,
+                            firm_count=self.firm_count,
+                            init_dist=self.initial_vehicle_distribution[f],
+                            pricing_model=self.pricing_model
+                        )
+                        for f in range(self.firm_count)
+                    ]
         # self.pricing_model = cfg.pricing_model # pricing model, e.g. "cournot", "bertrand", "exogenous"   
         for i in self.region:
             self.depDemand[i] = defaultdict(float)
@@ -153,9 +202,12 @@ class AMoD:
                     fixed_price = self.price[i,j][t]
                     agent_demand_edges.append((i,j))
                     # print(t, agent_demand[(i,j)], fixed_price, agent_demand_edges)
-                    agent_price[(i,j)] = self.compute_price(i, j, t, fixed_price, agent_demand[(i,j)], pricing_model=self.pricing_model)
-                    
+                    # agent_price[(i,j)] = self.compute_price(i, j, t, fixed_price, agent_demand[(i,j)], pricing_model=self.pricing_model)
+                    agent_price[(i,j)] = fixed_price
+
                     # print(f"Adding demand for edge ({i},{j}) at time {t}: {self.demand[i,j][t]} with fixed price : {fixed_price}, price {self.price[i,j][t]}")
+
+
         else:
             # here we are taking all the demand requests
             # print(f"Setting the demand to receive all of them")
@@ -210,39 +262,110 @@ class AMoD:
         self.reward = 0
         for i in self.region:
             self.acc[i][t+1] = self.acc[i][t]
-        self.info['served_demand'] = 0 # initialize served demand
-        self.info["operating_cost"] = 0 # initialize operating cost
-        self.info['revenue'] = 0
-        self.info['profit'] = 0
-        if paxAction is None:  # default matching algorithm used if isMatching is True, matching method will need the information of self.acc[t+1], therefore this part cannot be put forward
-            paxAction = self.matching(CPLEXPATH=CPLEXPATH, PATH=PATH, platform = platform)
-        self.paxAction = paxAction
-        # serving passengers
-        test_rew =0
-        for k in range(len(self.edges)):
-            i,j = self.edges[k]
-            if (i,j) not in self.demand or t not in self.demand[i,j] or self.paxAction[k]<1e-3:
-                continue
-            # I moved the min operator above, since we want paxFlow to be consistent with paxAction
-            assert paxAction[k] < self.acc[i][t+1] + 1e-3
-            # acc - available vehicles in region, dacc - arriving vehicles in region, paxAction - number of vehicles with passengers
-            self.paxAction[k] = min(self.acc[i][t+1], paxAction[k]) # Make sure action does not exceed available vehicles            
-            self.servedDemand[i,j][t] = self.paxAction[k] # amount of demand served in this time step
-            self.paxFlow[i,j][t+self.demandTime[i,j][t]] = self.paxAction[k] # vehicles with passengers flowing region i to region j considering the arrival time
-            self.info["operating_cost"] += self.demandTime[i,j][t]*self.beta*self.paxAction[k] # Calculate operating cost
-            self.acc[i][t+1] -= self.paxAction[k] # How many vehicles are left in region i at time t+1
-            self.info['served_demand'] += self.servedDemand[i,j][t] # How much demand is served in this time step            
-            self.dacc[j][t+self.demandTime[i,j][t]] += self.paxFlow[i,j][t+self.demandTime[i,j][t]] # Adding in passenger vehicles to those arriving in region j at time t+self.demandTime[i,j][t]
-            self.reward += self.paxAction[k]*(self.price[i,j][t] - self.demandTime[i,j][t]*self.beta)  # reward is price - operating cost (I'm guessing price is what the passengers pay?)
-            test_rew += self.paxAction[k]*(self.price[i,j][t]) # Reward from serving passengers, so adding revenue from passengers
 
-            self.info['revenue'] += self.paxAction[k]*(self.price[i,j][t]) # Revenue from serving passengers
-            self.info['profit'] += self.paxAction[k]*(self.price[i,j][t] - self.demandTime[i,j][t]*self.beta)  # profit is price - operating cost
+        if getattr(self.cfg, "demand_filter_type", None) == "competition":
+            # Rebuild global availability from firms at t+1 (post-rebalance). If firms' acc not synced, fallback to t.
+            for i in self.region:
+                self.acc[i][t+1] = 0.0
 
-        
-        self.obs = (self.acc, self.time, self.dacc, self.demand) # for acc, the time index would be t+1, but for demand, the time index would be t
-        done = False # if passenger matching is executed first
-        return self.obs, max(0,self.reward), done, self.info
+            # Prepare per-firm demand/price dicts, should match what Fleet expects
+            demand_f = {m: defaultdict(dict) for m in range(self.firm_count)}
+            price_f  = {m: defaultdict(dict) for m in range(self.firm_count)}
+
+            for (i,j) in self.demand:
+                if t in self.demand[i,j] and self.demand[i,j][t] > 1e-3: #same as the default in matching pupl?
+                    total_d = float(self.demand[i,j][t])
+                    base_p  = float(self.price[i,j][t])
+
+                    # total supply at origin i across ALL firms (after rebalancing)
+                    total_supply_i = 0.0
+                    for m in range(self.firm_count):
+                        # keep firm time consistent with env
+                        self.firms[m].time = t
+                        total_supply_i += float(self.firms[m].acc[i].get(t+1, self.firms[m].acc[i].get(t, 0.0))) # for solver apparently, but i know is int
+
+                    p_m = {m: self.compute_price(i, j, t, base_p, total_supply_i, self.pricing_model) for m in range(self.firm_count)}
+
+                    beta_d = self.beta ## check, same beta?
+                    weights = {m: math.exp(-beta_d * p_m[m]) for m in range(self.firm_count)}
+                    denom = sum(weights.values()) or 1.0
+
+                    for m in range(self.firm_count):
+                        price_f[m][(i,j)][t]  = p_m[m]
+                        demand_f[m][(i,j)][t] = total_d * (weights[m] / denom)
+
+            # Reset step-level info (aggregates)
+            self.info['served_demand']  = 0.0
+            self.info['operating_cost'] = 0.0
+            self.info['revenue']        = 0.0
+            self.info['profit']         = 0.0
+
+            total_reward = 0.0
+
+            # Each firm optimizes independently using its existing Fleet.pax_step
+            for m in range(self.firm_count):
+                obs_m, rew_m, done_m, info_m = self.firms[m].pax_step(
+                    demand=demand_f[m],
+                    price=price_f[m],
+                    travelTime=self.demandTime,
+                    paxAction=None,
+                    CPLEXPATH=None,
+                    PATH=PATH,
+                    platform=platform
+                )
+                # accumulate stats
+                self.info['served_demand']  += float(info_m.get('served_demand', 0.0))
+                self.info['operating_cost'] += float(info_m.get('operating_cost', 0.0))
+                self.info['revenue']        += float(info_m.get('revenue', 0.0))
+                self.info['profit']         += float(info_m.get('profit', 0.0))
+                total_reward                += float(info_m.get('reward', rew_m))
+
+            # Rebuild global availability view at t+1 by summing firms
+            for i in self.region:
+                self.acc[i][t+1] = sum(self.firms[m].acc[i].get(t+1, 0.0) for m in range(self.firm_count))
+
+            # Return early; the old single-fleet path below remains for other modes
+            self.obs = (self.acc, self.time, self.dacc, self.demand)
+            return self.obs, max(0.0, total_reward), False, self.info
+
+
+
+        else:
+            self.info['served_demand'] = 0 # initialize served demand
+            self.info["operating_cost"] = 0 # initialize operating cost
+            self.info['revenue'] = 0
+            self.info['profit'] = 0
+            if paxAction is None:  # default matching algorithm used if isMatching is True, matching method will need the information of self.acc[t+1], therefore this part cannot be put forward
+                paxAction = self.matching(CPLEXPATH=CPLEXPATH, PATH=PATH, platform = platform)
+            self.paxAction = paxAction
+            
+            
+            # serving passengers
+            test_rew =0
+            for k in range(len(self.edges)):
+                i,j = self.edges[k]
+                if (i,j) not in self.demand or t not in self.demand[i,j] or self.paxAction[k]<1e-3:
+                    continue
+                # I moved the min operator above, since we want paxFlow to be consistent with paxAction
+                assert paxAction[k] < self.acc[i][t+1] + 1e-3
+                # acc - available vehicles in region, dacc - arriving vehicles in region, paxAction - number of vehicles with passengers
+                self.paxAction[k] = min(self.acc[i][t+1], paxAction[k]) # Make sure action does not exceed available vehicles            
+                self.servedDemand[i,j][t] = self.paxAction[k] # amount of demand served in this time step
+                self.paxFlow[i,j][t+self.demandTime[i,j][t]] = self.paxAction[k] # vehicles with passengers flowing region i to region j considering the arrival time
+                self.info["operating_cost"] += self.demandTime[i,j][t]*self.beta*self.paxAction[k] # Calculate operating cost
+                self.acc[i][t+1] -= self.paxAction[k] # How many vehicles are left in region i at time t+1
+                self.info['served_demand'] += self.servedDemand[i,j][t] # How much demand is served in this time step            
+                self.dacc[j][t+self.demandTime[i,j][t]] += self.paxFlow[i,j][t+self.demandTime[i,j][t]] # Adding in passenger vehicles to those arriving in region j at time t+self.demandTime[i,j][t]
+                self.reward += self.paxAction[k]*(self.price[i,j][t] - self.demandTime[i,j][t]*self.beta)  # reward is price - operating cost (I'm guessing price is what the passengers pay?)
+                test_rew += self.paxAction[k]*(self.price[i,j][t]) # Reward from serving passengers, so adding revenue from passengers
+
+                self.info['revenue'] += self.paxAction[k]*(self.price[i,j][t]) # Revenue from serving passengers
+                self.info['profit'] += self.paxAction[k]*(self.price[i,j][t] - self.demandTime[i,j][t]*self.beta)  # profit is price - operating cost
+
+            
+            self.obs = (self.acc, self.time, self.dacc, self.demand) # for acc, the time index would be t+1, but for demand, the time index would be t
+            done = False # if passenger matching is executed first
+            return self.obs, max(0,self.reward), done, self.info
     
     # reb step
     def reb_step(self, rebAction):
@@ -386,33 +509,44 @@ class AMoD:
 
         return self.obs
     
-    def compute_price(self, i, j, t, p, d, pricing_model):
+    def compute_price(self, i, j, t, base_price, total_supply, pricing_model):
         # print(pricing_model)
         # model: "cournot", "bertrand", "exogenous"
         if pricing_model == "cournot":
-            # test for now, we could use historical demand-price
-            supply = self.acc[i][t]  # total supply at time t+1 # CHECK
-            q_total = supply * self.firm_count # supply, number of initial vehicles (constant right now)
-            a = 2*p 
-            b = 0.1  # slope  # match the overleaf
-            cournot_price = max(0.0, a - b * q_total)
+            try:
+                q_total = sum(self.firms[f].acc[i][t] for f in range(self.firm_count))
+            except KeyError:
+                q_total = sum(self.initial_vehicle_distribution[f][i] for f in range(self.firm_count))
+            if q_total <= 0:
+                return base_price 
+
+            # supply, number of initial vehicles (constant right now)
+            # chekcing the q_total with total_Supplu
+            a = 2* base_price 
+            alpha = 0.1
+            b = alpha * a * (1 / total_supply)
+            cournot_price = a - b * total_supply
             # print(supply, q_total, p) # or current planned quantity
             # print(f"Cournot price for edge ({i},{j}) at time {t}: {cournot_price}, and p,q: {p}, {q_total}")
             return cournot_price
         elif pricing_model == "bertrand":
-            return p
-
+            return base_price
         else:
-            return p
+            return base_price
 
 
 class Fleet:
-    def __init__(self, scenario, beta=0.2):
+    def __init__(self, scenario, beta=0.2, firm_id=0, firm_count=1,
+                 init_dist=None, pricing_model=None):
+        self.firm_id = firm_id
+        self.firm_count = firm_count
         self.beta = beta
+        self.pricing_model = pricing_model
 
         self.G = scenario.G
         self.regions = list(self.G) # set of regions
-        self.t = 0 # current time
+        # self.t = 0 # current time
+        self.time = 0 # why t?
         self.acc = defaultdict(dict) # number of vehicles within each region, key: i - region, t - time
         self.dacc = defaultdict(dict) # number of vehicles arriving at each region, key: i - region, t - time
         # self.paxFlow = defaultdict(dict)
@@ -424,7 +558,10 @@ class Fleet:
         self.edges = list(set(self.edges))
         # for i,j in FIX
         #     self.paxFlow[i,j] = defaultdict(float) 
-        self.pricing_model = "cournot"
+        self.initial_vehicle_distribution = init_dist or {n: 0 for n in self.G.nodes}
+        for n in self.G.nodes:
+            self.acc[n][0] = int(self.initial_vehicle_distribution.get(n, 0))
+            self.dacc[n] = defaultdict(float)
 
     def matching(self, demand, price, fixed_price=True):
         # TODO: Remove t and just directly pass demand for this timestep
@@ -434,13 +571,14 @@ class Fleet:
         # Compute price if needed
         if not fixed_price:
             # print("Price needs to be computed")
-            agent_demand = {}, agent_price = {}, agent_demand_edges = []
+            agent_demand, agent_price, agent_demand_edges = {}, {}, []
             for ind, (i,j) in enumerate(demand):
                 if t in demand[i,j] and demand[i,j][t]>1e-3:
                     agent_demand[(i,j)] = demand[i,j][t]
-                    set_price = price[i,j][t]
+                    # set_price = price[i,j][t]
                     agent_demand_edges.append((i,j))
-                    agent_price[(i,j)] = self.compute_price(i, j, t, set_price, agent_demand[(i,j)], pricing_model=self.pricing_model)
+                    agent_price[(i,j)] = price[i,j][t]
+                    # agent_price[(i,j)] = self.compute_price(i, j, t, set_price, agent_demand[(i,j)], pricing_model=self.pricing_model)
                     # print(f"Adding demand for edge ({i},{j}) at time {t}: {self.demand[i,j][t]} with fixed price : {fixed_price}, price {self.price[i,j][t]}")
         else:
             # print(f"Price is provided, using it directly")
@@ -485,34 +623,40 @@ class Fleet:
             print(f"Optimization failed with status: {LpStatus[status]}")
             return None
         
-    def compute_price(self, i, j, t, p, d, pricing_model):
-        # print(pricing_model)
-        # model: "cournot", "bertrand", "exogenous"
-        if pricing_model == "cournot":
-            # test for now, we could use historical demand-price
-            supply = self.acc[i][t]  # total supply at time t+1 # CHECK
-            q_total = supply * self.firm_count # supply, number of initial vehicles (constant right now)
-            a = 2*p 
-            b = 0.1  # slope  # match the overleaf
-            cournot_price = max(0.0, a - b * q_total)
-            # print(supply, q_total, p) # or current planned quantity
-            # print(f"Cournot price for edge ({i},{j}) at time {t}: {cournot_price}, and p,q: {p}, {q_total}")
-            return cournot_price
-        elif pricing_model == "bertrand":
-            return p
-        else:
-            return p
+    # def compute_price(self, i, j, t, p, d, pricing_model):
+    #     # print(pricing_model)
+    #     # model: "cournot", "bertrand", "exogenous"
+    #     if pricing_model == "cournot":
+    #         supply_firm = self.acc[i][t] 
+    #         # test for now, we could use historical demand-price
+    #         if self.initial_vehicle_distribution_method is None:
+    #             q_total = supply_firm * self.firm_count 
+    #         else:
+    #             q_total = sum(self.initial_vehicle_distribution[m][i] for m in self.initial_vehicle_distribution)
+
+    #         # supply, number of initial vehicles (constant right now)
+    #         a = 2*p 
+    #         alpha = 0.1
+    #         b = alpha * a * (1 / q_total)
+    #         cournot_price = a - b * q_total
+    #         # print(supply, q_total, p) # or current planned quantity
+    #         # print(f"Cournot price for edge ({i},{j}) at time {t}: {cournot_price}, and p,q: {p}, {q_total}")
+    #         return cournot_price
+    #     elif pricing_model == "bertrand":
+    #         return p
+    #     else:
+    #         return p
         
     # pax step
     def pax_step(self, demand, price, travelTime, paxAction=None, CPLEXPATH=None, PATH='', platform ='linux'):
         info = dict.fromkeys(['revenue', 'served_demand', 'rebalancing_cost', 'operating_cost', 'profit', 'reward'], 0)
         t = self.time
-        for i in self.region:
+        for i in self.regions:
             self.acc[i][t+1] = self.acc[i][t]
 
         # paxFlow = 
         if paxAction is None:  # default matching algorithm used if isMatching is True, matching method will need the information of self.acc[t+1], therefore this part cannot be put forward
-            paxAction = self.matching(demand, price, fixed_price=False)
+            paxAction = self.matching(demand, price, fixed_price=True) # we already compute this in the AMoD
         for k, (i,j) in enumerate(self.edges):
             pax_served = paxAction[k]
             if (i,j) not in demand or t not in demand[i,j] or pax_served < 1e-3:
@@ -618,7 +762,7 @@ class Scenario:
     def __init__(self, N1=2, N2=4, tf=60, sd=None, ninit=5, tripAttr=None, demand_input=None, demand_ratio = None,
                  trip_length_preference = 0.25, grid_travel_time = 1, fix_price=True, alpha = 0.2, json_file = None, 
                  json_hr = 9, json_tstep = 2, varying_time=False, json_regions = None, prune=False, supply_factor=1,
-                 firm_count =1, demand_filter_type = None, initial_vehicle_distribution = None, pricing_model = None):
+                 firm_count =1, demand_filter_type = None, initial_vehicle_distribution_method = None, pricing_model = None):
         # trip_length_preference: positive - more shorter trips, negative - more longer trips
         # grid_travel_time: travel time between grids
         # demand_input： list - total demand out of each region, 
@@ -777,7 +921,7 @@ class Scenario:
                 for n in self.G.nodes:
                     self.G.nodes[n]['accInit'] = round(10/supply_factor)
             else: 
-                if initial_vehicle_distribution == "random":
+                if initial_vehicle_distribution_method == "random":
                     for item in data["totalAcc"]:
                         hr, acc = item["hour"], item["acc"]
                         if hr == json_hr+int(round(json_tstep/2*tf/60)):
