@@ -385,24 +385,31 @@ class AMoD:
         return self.obs
     
 
-    def compute_price(self, i, j, t, p, d, pricing_model):
+    def compute_price(self, i, j, t, base_price, total_supply, pricing_model):
         # print(pricing_model)
         # model: "cournot", "bertrand", "exogenous"
+        pricing_model = None
         if pricing_model == "cournot":
-            # test for now, we could use historical demand-price
-            supply = self.acc[i][t]  # total supply at time t+1 # CHECK
-            q_total = supply * self.firm_count # supply, number of initial vehicles (constant right now)
-            a = 2*p 
-            b = 0.1  # slope  # match the overleaf
-            cournot_price = max(0.0, a - b * q_total)
+            try:
+                q_total = sum(self.firms[f].acc[i][t] for f in range(self.firm_count))
+            except KeyError:
+                q_total = sum(self.initial_vehicle_distribution[f][i] for f in range(self.firm_count))
+            if q_total <= 0:
+                return base_price 
+
+            # supply, number of initial vehicles (constant right now)
+            # chekcing the q_total with total_Supplu
+            a = base_price 
+            alpha = 0.1
+            b = alpha * a * (1 / total_supply)
+            cournot_price = a - b * total_supply
             # print(supply, q_total, p) # or current planned quantity
             # print(f"Cournot price for edge ({i},{j}) at time {t}: {cournot_price}, and p,q: {p}, {q_total}")
             return cournot_price
         elif pricing_model == "bertrand":
-            return p
-
+            return base_price
         else:
-            return p
+            return base_price
 
     
 class Scenario:
