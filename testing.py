@@ -4,14 +4,20 @@ from omegaconf import DictConfig
 import torch
 import json
 import numpy as np
+from copy import deepcopy
 from hydra import initialize, compose
 from src.algos.registry import get_model
 import os 
+from tqdm import trange
 import copy
 import seaborn as sns
 import matplotlib.pyplot as plt
 import time
 from collections import defaultdict
+from src.envs.sim.competition import CompetitionSim, Allocator
+from src.algos.reb_flow_solver import solveRebFlow
+from src.envs.sim.multi_macro_env import Fleet
+
 
 RUN_TIME = time.strftime("%Y%m%d-%H%M%S")
 
@@ -195,35 +201,123 @@ def save_sampled_demand(tripAttr, filename=None):
         json.dump(tripAttr, f, indent=4)
         
 def test_approach(cfg, env, parser, device):
-    model = setup_model(cfg, env, parser, device)
+
+    multi = cfg.simulator.firm_count 
+
+    if not multi or multi <= 1:
+        model = setup_model(cfg, env, parser, device)
+        
+        print(f'Testing model {cfg.model.name} on {cfg.simulator.name} environment')
     
-    print(f'Testing model {cfg.model.name} on {cfg.simulator.name} environment')
-  
-    episode_reward, episode_served_demand, episode_rebalancing_cost, inflows = model.test(cfg.model.test_episodes, env)
-    if cfg.simulator.constant_vehicle_count:
-        supply_factor = cfg.simulator.firm_count
-    else:
-        supply_factor = 1
-    file_str = RUN_TIME + "_" + str(cfg.model.name) + "_supply_factor_" + str(supply_factor) + "_firm_count_" + str(cfg.simulator.firm_count) + "_dm_" + str(cfg.simulator.demand_filter_type)
-    save_vehicle_distribution(env.acc, file_str)
+        episode_reward, episode_served_demand, episode_rebalancing_cost, inflows = model.test(cfg.model.test_episodes, env)
+        if cfg.simulator.constant_vehicle_count:
+            supply_factor = cfg.simulator.firm_count
+        else:
+            supply_factor = 1
+        file_str = RUN_TIME + "_" + str(cfg.model.name) + "_supply_factor_" + str(supply_factor) + "_firm_count_" + str(cfg.simulator.firm_count) + "_dm_" + str(cfg.simulator.demand_filter_type)
+        save_vehicle_distribution(env.acc, file_str)
 
 
-    print('Mean Episode Profit ($): ', np.mean(episode_reward))
-    print('Mean Episode Served Demand- Proit($): ', np.mean(episode_served_demand))
-    print('Mean Episode Rebalancing Cost($): ', np.mean(episode_rebalancing_cost))
+        print('Mean Episode Profit ($): ', np.mean(episode_reward))
+        print('Mean Episode Served Demand- Proit($): ', np.mean(episode_served_demand))
+        print('Mean Episode Rebalancing Cost($): ', np.mean(episode_rebalancing_cost))
 
-    inflows = np.mean(inflows, axis=0)
+        inflows = np.mean(inflows, axis=0)
 
-    mean_reward = np.mean(episode_reward)
-    mean_served_demand = np.mean(episode_served_demand)
-    mean_rebalancing_cost = np.mean(episode_rebalancing_cost)
+        mean_reward = np.mean(episode_reward)
+        mean_served_demand = np.mean(episode_served_demand)
+        mean_rebalancing_cost = np.mean(episode_rebalancing_cost)
 
-    mean_reward = round(mean_reward/1000,2)
-    mean_served_demand = round(mean_served_demand/1000,2)
-    mean_rebalancing_cost = round(mean_rebalancing_cost/1000,2)
-    rl_means = (mean_reward, mean_served_demand, mean_rebalancing_cost)
+        mean_reward = round(mean_reward/1000,2)
+        mean_served_demand = round(mean_served_demand/1000,2)
+        mean_rebalancing_cost = round(mean_rebalancing_cost/1000,2)
+        rl_means = (mean_reward, mean_served_demand, mean_rebalancing_cost)
 
-    return rl_means, inflows
+        return rl_means, inflows
+    
+    # === Multi-fleet competition path ===
+    K = cfg.simulator.firm_count
+    # assert K == len(cfg.model.name), "simulator.firm_count must match len(model.name)" for now the same, just sac
+    device = torch.device("cpu")
+    test_episodes = cfg.model.test_episodes
+    epochs = trange(test_episodes) 
+    # 1) One Fleet env per firm from the SAME scenario
+    fleets = [Fleet(env.scenario, cfg, firm_id=f"firm_{k}", beta=0.2) for k in range(K)]
+    for f in fleets:
+        if not hasattr(f, "region") and hasattr(f, "regions"):
+            f.region = f.regions
+
+    # 2) One model per firm, each attached to its own Fleet
+    models = []
+    for k in range(K):
+        # Clone cfg but override model name/checkpoint for this firm
+        # firm_cfg = deepcopy(cfg)
+        m = setup_model(cfg, env, parser, device) # this could be env per fleet, unsure
+        models.append(m)
+
+    # 3) CompetitionSim setups the demand allocation
+    sim = CompetitionSim(env.scenario, fleets, allocator=Allocator(fleets, rule="equal"))
+    sim.reset()
+
+    # 4) Drive synchronized episodes (since model.test assumes single-fleet)
+    episode_rewards = [[] for _ in range(K)]
+    episode_served  = [[] for _ in range(K)]
+    episode_reb_cost= [[] for _ in range(K)]
+    episode_inflows = [[] for _ in range(K)]
+    # rl_means = [[] for _ in range(K)]
+    # inflows = [[] for _ in range(K)]
+    seeds = list(range(env.cfg.seed, env.cfg.seed + test_episodes+1))
+
+
+    for i_episode in epochs:
+        # eps_reward = [[] for _ in range(K)]
+        # eps_served_demand = [[] for _ in range(K)]
+        # eps_rebalancing_cost = [[] for _ in range(K)]
+        # eps_rebalancing_veh = [[] for _ in range(K)]
+        
+        # inflow = [[] for _ in range(K)]
+        # obs = [[] for _ in range(K)]
+        # rew = [[] for _ in range(K)]
+        # Set seed for reproducibility across different policies
+        np.random.seed(seeds[i_episode])
+        done = False
+
+
+        while not done:
+            obs_list = [parser.parse_obs((f.acc, f.t, f.dacc, env.demand)).to(device) for f in fleets]
+
+            reb_actions = []
+            for k, f in enumerate(fleets):
+                a = models[k].select_action(obs_list[k], deterministic=True)
+                desiredAcc = {f.region[i]: int(a[i] * dictsum(f.acc, f.t + 1)) for i in range(len(f.region))}
+                reb = solveRebFlow(f, getattr(f.cfg, "directory", ""), desiredAcc, getattr(models[k], "cplexpath", None))
+                reb_actions.append(reb)
+
+            done, infos = sim.step(reb_actions)
+            for k, f in enumerate(fleets):
+                info = infos[k]
+                net = info.get("profit", 0.0) - info.get("rebalancing_cost", 0.0)
+                episode_rewards[k].append(net)
+                episode_served[k].append(info.get("profit", 0.0))
+                episode_reb_cost[k].append(info.get("rebalancing_cost", 0.0))
+
+                inflow_vec = np.zeros(len(f.region))
+                for idx, (i, j) in enumerate(f.edges):
+                    inflow_vec[j] += reb_actions[k][idx]
+                episode_inflows[k].append(inflow_vec)
+
+
+    rl_means_per_fleet = []
+    inflows_per_fleet  = []
+    for k in range(K):
+        r  = np.sum(episode_rewards[k]) / max(1, test_episodes)
+        sd = np.sum(episode_served[k])  / max(1, test_episodes)
+        rc = np.sum(episode_reb_cost[k]) / max(1, test_episodes)
+        rl_means_per_fleet.append((round(r / 1000, 2), round(sd / 1000, 2), round(rc / 1000, 2)))
+
+        inflows_per_fleet.append(np.mean(np.stack(episode_inflows[k], axis=0), axis=0))
+
+    return rl_means_per_fleet, inflows_per_fleet
     
 
 def get_no_control_performance(cfg, env, parser, device, use_saved_data=False):
