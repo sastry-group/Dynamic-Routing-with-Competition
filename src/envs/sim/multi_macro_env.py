@@ -412,11 +412,13 @@ class AMoD:
             return base_price
 
 class Fleet:
-    def __init__(self, scenario, cfg, beta=0.2, firm_id=None, init_acc="equal"):
+    def __init__(self, env, cfg, beta=0.2, firm_id=None, init_acc="equal"):
         self.beta = beta
+        self.scenario = env.scenario
         self.firm_id = firm_id  
-        self.G = scenario.G
+        self.G = env.G
         self.firm_count = cfg.simulator.firm_count
+        self.rebTime = self.scenario.rebTime
 
 
         self.regions = list(self.G) # set of regions
@@ -449,6 +451,7 @@ class Fleet:
         for e in self.edges:
             self.paxFlow[e] = defaultdict(float)
 
+        self.pricing_model = "equal"
         self.info = dict.fromkeys(['revenue','served_demand','rebalancing_cost','operating_cost','profit'], 0.0)
 
 
@@ -462,17 +465,17 @@ class Fleet:
             # print("Price needs to be computed")
             agent_demand, agent_price, agent_demand_edges = {}, {}, []
             for ind, (i,j) in enumerate(demand):
-                if t in demand[i,j] and demand[i,j][t]>1e-3:
-                    agent_demand[(i,j)] = demand[i,j][t]
-                    set_price = price[i,j][t]
+                if demand[i,j]>1e-3:
+                    agent_demand[(i,j)] = demand[i,j]
+                    set_price = price[i,j]
                     agent_demand_edges.append((i,j))
                     agent_price[(i,j)] = self.compute_price(i, j, t, set_price, agent_demand[(i,j)], pricing_model=self.pricing_model)
                     # print(f"Adding demand for edge ({i},{j}) at time {t}: {self.demand[i,j][t]} with fixed price : {fixed_price}, price {self.price[i,j][t]}")
         else:
             # print(f"Price is provided, using it directly")
-            agent_demand = {(i, j): demand[i,j][t] for ind, (i,j) in enumerate(demand) if t in demand[i,j] and demand[i,j][t]>1e-3}
-            agent_price = {(i, j): price[i,j][t] for ind, (i,j) in enumerate(price) if t in demand[i,j] and demand[i,j][t]>1e-3}
-            agent_demand_edges = [(i, j) for ind, (i,j) in enumerate(demand) if t in demand[i,j] and demand[i,j][t]>1e-3]  
+            agent_demand = {(i, j): demand[i,j] for ind, (i,j) in enumerate(demand) if demand[i,j]>1e-3}
+            agent_price = {(i, j): price[i,j] for ind, (i,j) in enumerate(price) if demand[i,j]>1e-3}
+            agent_demand_edges = [(i, j) for ind, (i,j) in enumerate(demand) if demand[i,j]>1e-3]  
 
         # print(f"agent_demand: {agent_demand}")    
         # print(f"agent_demand_edges: {agent_demand_edges}")  
@@ -502,7 +505,7 @@ class Fleet:
         # Solve the optimization problem
         status = model.solve(pulp.PULP_CBC_CMD(msg=False, options=["primalTol=1e-10", "dualTol=1e-10", "mipGap=1e-10"]))
 
-        self.time += 1
+        # self.time += 1
         # Output the results
         if LpStatus[status] == "Optimal":
             flow = {(i, j): value(flow[(i, j)]) for (i, j) in agent_demand_edges}
@@ -542,7 +545,7 @@ class Fleet:
             paxAction = self.matching(demand, price, fixed_price=False)
         for k, (i,j) in enumerate(self.edges):
             pax_served = paxAction[k]
-            if (i,j) not in demand or t not in demand[i,j] or pax_served < 1e-3:
+            if (i,j) not in demand or pax_served < 1e-3:
                 continue
             # I moved the min operator above, since we want paxFlow to be consistent with paxAction
             assert pax_served < self.acc[i][t+1] + 1e-3
@@ -552,7 +555,7 @@ class Fleet:
             # paxFlow[(i,j)][t+travelTime[i,j][t]] = pax_served # vehicles with passengers flowing region i to region j considering the arrival time
             self.acc[i][t+1] -= pax_served # How many vehicles are left in region i at time t+1
             # Vehicles arriving to region j at t+travelTime[i,j][t] are available at the following time step
-            self.acc[j][t+travelTime[i,j][t]+1] += pax_served
+            # self.acc[j][t+travelTime[i,j][t]+1] += pax_served
             self.dacc[j][t+travelTime[i,j][t]] += pax_served # Adding in passenger vehicles to those arriving in region j at time t+self.demandTime[i,j][t]
             
             profit = pax_served*(self.price[i,j][t] - travelTime[i,j][t]*self.beta) # profit is price - operating cost
@@ -587,7 +590,7 @@ class Fleet:
 
             # self.rebFlow[i,j][t+self.rebTime[i,j][t]] = rebased       
             self.acc[i][t+1] -= rebased
-            self.acc[j][t+self.rebTime[i,j][t]+1] += rebased
+            # self.dacc[j][t+self.rebTime[i,j][t]+1] += rebased
             self.dacc[j][t+self.rebTime[i,j][t]] += rebased
             info['rebalancing_cost'] += self.rebTime[i,j][t]*self.beta*rebased
             info["operating_cost"] += self.rebTime[i,j][t]*self.beta*rebased

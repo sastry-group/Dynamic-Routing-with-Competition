@@ -56,11 +56,11 @@ def solveRebFlow_pulp(env, desiredAcc):
     t = env.time
     
     # Prepare the data: rounding desiredAcc and getting current vehicle counts
-    accRLTuple = [(n, int(round(desiredAcc[n]))) for n in desiredAcc]
-    accTuple = [(n, int(env.acc[n][t+1])) for n in env.acc]
+    # accRLTuple = [(n, int(round(desiredAcc[n]))) for n in desiredAcc]
+    # accTuple = [(n, int(env.acc[n][t+1])) for n in env.acc]
     
-    # Extract the edges and the times
-    edgeAttr = [(i, j, env.G.edges[i, j]['time']) for i, j in env.G.edges]
+    # # Extract the edges and the times
+    # edgeAttr = [(i, j, env.G.edges[i, j]['time']) for i, j in env.G.edges]
     edges = [(i, j) for i, j in env.G.edges]
 
     # Map vehicle availability and desired vehicles for each region

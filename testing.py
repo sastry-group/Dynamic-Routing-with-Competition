@@ -14,9 +14,10 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 import time
 from collections import defaultdict
-from src.envs.sim.competition import CompetitionSim, Allocator
+from src.envs.sim.competition import CompetitionSim
 from src.algos.reb_flow_solver import solveRebFlow
 from src.envs.sim.multi_macro_env import Fleet
+from src.misc.utils import dictsum
 
 
 RUN_TIME = time.strftime("%Y%m%d-%H%M%S")
@@ -242,7 +243,7 @@ def test_approach(cfg, env, parser, device):
     test_episodes = cfg.model.test_episodes
     epochs = trange(test_episodes) 
     # 1) One Fleet env per firm from the SAME scenario
-    fleets = [Fleet(env.scenario, cfg, firm_id=f"firm_{k}", beta=0.2) for k in range(K)]
+    fleets = [Fleet(env, cfg, firm_id=f"firm_{k}", beta=0.2) for k in range(K)]
     for f in fleets:
         if not hasattr(f, "region") and hasattr(f, "regions"):
             f.region = f.regions
@@ -256,7 +257,7 @@ def test_approach(cfg, env, parser, device):
         models.append(m)
 
     # 3) CompetitionSim setups the demand allocation
-    sim = CompetitionSim(env.scenario, fleets, allocator=Allocator(fleets, rule="equal"))
+    sim = CompetitionSim(env.scenario, fleets)
     sim.reset()
 
     # 4) Drive synchronized episodes (since model.test assumes single-fleet)
@@ -270,6 +271,9 @@ def test_approach(cfg, env, parser, device):
 
 
     for i_episode in epochs:
+        eps_reward = [0] * K
+        eps_served_demand = [0] * K
+        eps_rebalancing_cost = [0] * K
         # eps_reward = [[] for _ in range(K)]
         # eps_served_demand = [[] for _ in range(K)]
         # eps_rebalancing_cost = [[] for _ in range(K)]
@@ -290,21 +294,26 @@ def test_approach(cfg, env, parser, device):
             for k, f in enumerate(fleets):
                 a = models[k].select_action(obs_list[k], deterministic=True)
                 desiredAcc = {f.region[i]: int(a[i] * dictsum(f.acc, f.t + 1)) for i in range(len(f.region))}
-                reb = solveRebFlow(f, getattr(f.cfg, "directory", ""), desiredAcc, getattr(models[k], "cplexpath", None))
+                reb = solveRebFlow(f, [], desiredAcc, "None")
                 reb_actions.append(reb)
 
             done, infos = sim.step(reb_actions)
-            for k, f in enumerate(fleets):
-                info = infos[k]
-                net = info.get("profit", 0.0) - info.get("rebalancing_cost", 0.0)
-                episode_rewards[k].append(net)
-                episode_served[k].append(info.get("profit", 0.0))
-                episode_reb_cost[k].append(info.get("rebalancing_cost", 0.0))
 
-                inflow_vec = np.zeros(len(f.region))
-                for idx, (i, j) in enumerate(f.edges):
-                    inflow_vec[j] += reb_actions[k][idx]
-                episode_inflows[k].append(inflow_vec)
+            eps_reward = [eps_reward[k] + infos[k].get("profit", 0.0) - infos[k].get("rebalancing_cost", 0.0) for k in range(K)]
+            eps_served_demand = [eps_served_demand[k] + infos[k].get("profit", 0.0) for k in range(K)]
+            eps_rebalancing_cost = [eps_rebalancing_cost[k] + infos[k].get("rebalancing_cost", 0.0) for k in range(K)]
+
+        for k, f in enumerate(fleets):
+            # info = infos[k]
+            # net = info.get("profit", 0.0) - info.get("rebalancing_cost", 0.0)
+            episode_rewards[k].append(eps_reward[k])
+            episode_served[k].append(eps_served_demand[k])
+            episode_reb_cost[k].append(eps_rebalancing_cost[k])
+
+            inflow_vec = np.zeros(len(f.region))
+            for idx, (i, j) in enumerate(f.edges):
+                inflow_vec[j] += reb_actions[k][idx]
+            episode_inflows[k].append(inflow_vec)
 
 
     rl_means_per_fleet = []
