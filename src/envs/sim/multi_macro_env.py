@@ -551,7 +551,7 @@ class Fleet:
             assert pax_served < self.acc[i][t+1] + 1e-3
             # acc - available vehicles in region, dacc - arriving vehicles in region, paxAction - number of vehicles with passengers
             pax_served = min(self.acc[i][t+1], pax_served) # Make sure action does not exceed available vehicles
-
+            self.paxFlow[i,j][t+self.demandTime[i,j][t]] = pax_served
             # paxFlow[(i,j)][t+travelTime[i,j][t]] = pax_served # vehicles with passengers flowing region i to region j considering the arrival time
             self.acc[i][t+1] -= pax_served # How many vehicles are left in region i at time t+1
             # Vehicles arriving to region j at t+travelTime[i,j][t] are available at the following time step
@@ -588,7 +588,7 @@ class Fleet:
             # update the number of vehicles
             rebased = min(self.acc[i][t+1], rebAction[k])
 
-            # self.rebFlow[i,j][t+self.rebTime[i,j][t]] = rebased       
+            self.rebFlow[i,j][t+self.rebTime[i,j][t]] = rebased       
             self.acc[i][t+1] -= rebased
             # self.dacc[j][t+self.rebTime[i,j][t]+1] += rebased
             self.dacc[j][t+self.rebTime[i,j][t]] += rebased
@@ -600,6 +600,12 @@ class Fleet:
         # for k, (i,j) in enumerate(self.rebFlow):
         #     if t in self.rebFlow[i,j]:
         #         self.acc[j][t+1] += self.rebFlow[i,j][t]
+        for k in range(len(self.edges)):
+            i,j = self.edges[k]    
+            if (i,j) in self.rebFlow and t in self.rebFlow[i,j]:
+                self.acc[j][t+1] += self.rebFlow[i,j][t]
+            if (i,j) in self.paxFlow and t in self.paxFlow[i,j]:
+                self.acc[j][t+1] += self.paxFlow[i,j][t]
             
         self.time += 1
         obs = (self.acc, self.time, self.dacc, None) # use self.time to index the next time step
@@ -613,6 +619,8 @@ class Fleet:
         # Reset the fleet state
         self.acc = defaultdict(dict)
         self.dacc = defaultdict(dict)
+        self.rebFlow = defaultdict(dict)
+        self.paxFlow = defaultdict(dict)
         self.edges = []
         for i in self.G:
             self.edges.append((i,i))
@@ -622,6 +630,9 @@ class Fleet:
         # self.demand = defaultdict(dict) # demand
         self.price = defaultdict(dict) # price
         tripAttr = self.scenario.get_random_demand(reset=True)
+        for i,j in self.G.edges:
+            self.rebFlow[i,j] = defaultdict(float)
+            self.paxFlow[i,j] = defaultdict(float) 
         for n in self.G:
             self.acc[n][0] = self.G.nodes[n]['accInit']
             self.dacc[n] = defaultdict(float) 

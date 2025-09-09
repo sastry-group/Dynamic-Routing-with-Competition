@@ -197,7 +197,11 @@ class CompetitionSim:
         price = self.compute_price_per_t()
         demand = self.compute_demand_per_t(D)
 
-        # 3) each fleet solves its own pax LP with its cap + shared price
+        # 3) apply private rebalancing from the agents
+        for f, reb in zip(self.fleets, reb_actions_by_fleet):
+            f.reb_step(reb)
+
+        # 4) each fleet solves its own pax LP with its cap + shared price
         #    Implemented as Fleet.match_with_caps(caps, P) returning {(i,j):flow}
         # matched_list = []
         for f, fleet_demand, fleet_price in zip(self.fleets, demand, price):
@@ -206,13 +210,10 @@ class CompetitionSim:
             # matched_list.append(flows)
             f.pax_step(deepcopy(fleet_demand), deepcopy(fleet_price), self.travelTime)
 
-        # 4) apply private rebalancing from the agents
-        for f, reb in zip(self.fleets, reb_actions_by_fleet):
-            f.reb_step(reb)
 
         # 5) arrivals + time advance
-        for f in self.fleets:
-            f.advance()
+        # for f in self.fleets:
+        #     f.advance()
         self.t += 1
         # self.allocator.step()
 

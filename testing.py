@@ -258,7 +258,6 @@ def test_approach(cfg, env, parser, device):
 
     # 3) CompetitionSim setups the demand allocation
     sim = CompetitionSim(env.scenario, fleets)
-    sim.reset()
 
     # 4) Drive synchronized episodes (since model.test assumes single-fleet)
     episode_rewards = [[] for _ in range(K)]
@@ -285,6 +284,7 @@ def test_approach(cfg, env, parser, device):
         # Set seed for reproducibility across different policies
         np.random.seed(seeds[i_episode])
         done = False
+        sim.reset()
 
 
         while not done:
