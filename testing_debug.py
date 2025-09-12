@@ -29,18 +29,18 @@ importlib.reload(testing)
 
 config = {
     "simulator.name": "multi_macro",
-    "model.name": ["sac", "equal_distribution", "random"],
-    # "model.name": ["sac"],
+    # "model.name": ["sac", "equal_distribution", "random"],
+    "model.name": ["sac"],
     "simulator.city": "nyc_brooklyn", 
     "model.cplexpath": None, 
-    "model.test_episodes": 2,
+    "model.test_episodes": 10,
     "model.checkpoint_path": "SAC_portion_1_test_train",
     "simulator.reuse_no_control": False,
     "simulator.firm_count": 1,
     "simulator.agents_know_partial_demand": True,
     "simulator.constant_vehicle_count": True,
-    "simulator.demand_filter_type": "competition" ,
-    "simulator.pricing_model": "cournot"
+    "simulator.demand_filter_type": "equal" ,
+    "simulator.pricing_model": "equal"
 
 }
 
