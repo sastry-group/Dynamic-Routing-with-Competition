@@ -167,7 +167,7 @@ def multi_test(input_config):
 
     control_data = get_no_control_performance(cfg, env, parser, device, use_saved_data=cfg.simulator.reuse_no_control)
 
-    plot_comparison(cfg, env, control_data, data)
+    plot_multi_fleet_comparison(cfg, env, control_data, data)
 
 def save_vehicle_distribution(acc, file_str=None):
     """
@@ -284,13 +284,17 @@ def test_approach(cfg, env, parser, device):
         # Set seed for reproducibility across different policies
         np.random.seed(seeds[i_episode])
         done = False
-        sim.reset()
-        env.reset()
+        env.reset(multi_agent=True)
+        obs, rew = sim.reset()
+        eps_reward = rew
+        eps_served_demand = rew
+        eps_rebalancing_cost = [0] * K
 
 
         while not done:
             obs_list = [parser.parse_obs((f.acc, f.time, f.dacc, env.demand)).to(device) for f in sim.fleets]
 
+            env.time += 1
             reb_actions = []
             for k, f in enumerate(sim.fleets):
                 if cfg.model.name == "sac":
@@ -304,7 +308,6 @@ def test_approach(cfg, env, parser, device):
 
             done, infos = sim.step(reb_actions)
 
-            env.time += 1
             eps_reward = [eps_reward[k] + infos[k].get("profit", 0.0) - infos[k].get("rebalancing_cost", 0.0) for k in range(K)]
             eps_served_demand = [eps_served_demand[k] + infos[k].get("profit", 0.0) for k in range(K)]
             eps_rebalancing_cost = [eps_rebalancing_cost[k] + infos[k].get("rebalancing_cost", 0.0) for k in range(K)]
@@ -362,6 +365,106 @@ def get_no_control_performance(cfg, env, parser, device, use_saved_data=False):
     
     return (no_reb_reward, no_reb_demand, no_reb_cost)
     
+def plot_multi_fleet_comparison(cfg, env, control_data, comparison_data):
+    # Function to add value labels on top of bars
+    def add_value_labels(rects, ax):
+        for rect in rects:
+            height = rect.get_height()
+            ax.annotate(f'{height:.1f}',
+                        xy=(rect.get_x() + rect.get_width() / 2, height),
+                        xytext=(0, 3),  # 3 points vertical offset
+                        textcoords="offset points",
+                        ha='center', va='bottom')
+
+    profit_data, inflows = comparison_data
+    labels = ['Overall Profit', 'Served Demand Profit', 'Rebalancing Cost']
+    x = np.arange(len(labels))  # the label locations
+    width = 0.15  # the width of the bars
+    num_bars = len(profit_data) + 1
+
+    fig, axs = plt.subplots(nrows=1, ncols=cfg.simulator.firm_count, figsize=(15, 5))
+    if cfg.simulator.firm_count == 1:
+        axs = [axs]
+
+    #fig, ax = plt.subplots(figsize=(8, 5))
+
+    colors = sns.color_palette("hsv", len(profit_data) + 1)
+    start_x = x - (num_bars-1)*width/2 
+    for ind, (key, data) in enumerate(profit_data.items()):
+        for (ax, d) in zip(axs, data):
+            rects1 = ax.bar(start_x + ind*width, d, width, label=key, color=colors[ind])
+            add_value_labels(rects1, ax) # Adding value labels to each bar
+
+    for ax in axs:
+        rects2 = ax.bar(start_x + (ind+1)*width, control_data, width, label='No Control', color=colors[-1])
+        add_value_labels(rects2, ax)
+
+        # Add some text for labels, title and custom x-axis tick labels, etc.
+        ax.set_xlabel('Metrics')
+        ax.set_ylabel('$, x10^3')
+        if cfg.simulator.firm_count == 1:
+            ax.set_title(f'Comparison on {cfg.simulator.city} Environment with 1 Firm')
+        else:
+            ax.set_title(f'Comparison on {cfg.simulator.city} Environment with {cfg.simulator.firm_count} Firms')
+        ax.set_xticks(x)
+        ax.set_xticklabels(labels)
+        ax.legend()
+
+    #plt.tight_layout()
+    plt.grid(True, axis='y', linestyle='--', alpha=0.7)
+
+    # if cfg.simulator.city != 'nyc_brooklyn': 
+    plt.show()
+    a = 1 # just to have a breakpoint
+    # else: 
+    #     #plots for tutorial
+    #     open_reqest = {0: 0,
+    #         1: 414.0,
+    #         2: 0,
+    #         3: 0,
+    #         4: 0,
+    #         5: 49756.49999999998,
+    #         6: 9948.600000000006,
+    #         7: 98.99999999999999,
+    #         8: 198.00000000000003,
+    #         9: 881.9999999999998,
+    #         10: 1232.9999999999993,
+    #         11: 6492.600000000001,
+    #         12: 23293.80000000004,
+    #         13: 170.99999999999997}
+        
+    #     #open_reqest = {k: v / max(open_reqest.values()) for k,v in open_reqest.items()}
+
+    #     #inflows = inflows / max(inflows)
+
+    #     labels = range(14)
+    #     x = np.arange(len(labels))  # the label locations
+    #     width = 0.25  # the width of the bars
+
+    #     r1 = np.arange(14)
+    #     r2 = [x + width for x in r1]
+
+    #     #fig, ax = plt.subplots(figsize=(8, 5))
+    #     for key, data in inflows.items():
+    #         ax2.bar(r2, data, width, label=f'Rebalancing Flows for {key}', color="#0072BD")
+    #     ax3 = ax2.twinx()  # Create a second y-axis
+    #     ax3.bar(r1, open_reqest.values(), width, label='Profit', color="#A2142F")
+
+    #     # Add labels and title to the second plot
+    #     ax2.set_xlabel('Regions')
+    #     ax2.set_ylabel('Flows', color="#0072BD")
+    #     ax3.set_ylabel('Profit', color="#A2142F")
+    #     ax2.set_title('Comparison of Incoming Rebalancing Flows vs Profit')
+    #     ax2.set_xticks(r1)
+    #     ax2.set_xticklabels(labels)
+    #     ax2.tick_params(axis='y', labelcolor="#0072BD")
+    #     ax3.tick_params(axis='y', labelcolor="#A2142F")
+    #     #ax2.legend()
+    #     #ax3.legend()
+
+    #     plt.tight_layout()  
+    #     plt.show()
+
 
 def plot_comparison(cfg, env, control_data, comparison_data):
     # Function to add value labels on top of bars

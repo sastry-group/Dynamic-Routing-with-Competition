@@ -111,11 +111,13 @@ class CompetitionSim:
 
     def _market_publish(self):
         # shared total demand & price at time t
-        D = {(i, j): self.scenario.demand_input[i, j].get(self.t, 0.0)
+        # D = {(i, j): self.scenario.demand_input[i, j].get(self.t, 0.0)
+        #      for (i, j) in self.scenario.edges}
+        D = {(i, j): self.demand[i, j].get(self.t, 0.0)
              for (i, j) in self.scenario.edges}
-        P = {(i, j): self.scenario.p[i, j].get(self.t, 0.0)
+        P = {(i, j): self.price[i, j].get(self.t, 0.0)
              for (i, j) in self.scenario.edges}
-        T_pax = {(i, j): self.scenario.demandTime[i, j].get(self.t, 0)
+        T_pax = {(i, j): self.travelTime[i, j].get(self.t, 0)
                  for (i, j) in self.scenario.edges}
         return D, P, T_pax
 
@@ -155,14 +157,22 @@ class CompetitionSim:
             # else:
             #     self.regionDemand[i][t] +=d
         
-        self.compute_price_per_t()
+        # 1) market info
+        D, P, T_pax = self._market_publish()
+
+        # 2) deterministic demand split (no bidding)
+        # demand = self.allocator.compute_demand(D)
+        price = self.compute_price_per_t()
+        demand = self.compute_demand_per_t(D)
+
+        # self.compute_price_per_t()
         
         self.time = 0
         obs = []
         paxreward = []
         done = []
         info = []
-        for f in self.fleets:
+        for f, d, p in zip(self.fleets, demand, price):
             for i,j in self.G.edges:
                 f.rebFlow[i,j] = defaultdict(float)
                 f.paxFlow[i,j] = defaultdict(float)            
@@ -176,10 +186,11 @@ class CompetitionSim:
             f.demand = defaultdict(float)
             f.obs = (f.acc, f.time, f.dacc, f.demand)
             obs.append(f.obs)
-            paxreward.append(0)
+            # paxreward.append(0)
             # done.append(f.done)
             info.append(f.info)
-            f.obs, _, f.done, f.info = f.pax_step(deepcopy(f.demand), deepcopy(f.price), self.travelTime)
+            f.obs, rew, f.done, f.info = f.pax_step(d, p, self.travelTime)
+            paxreward.append(rew)
             f.reward = 0
         done = (self.tf == self.time+1)
         return obs, paxreward
@@ -189,6 +200,17 @@ class CompetitionSim:
         """
         reb_actions_by_fleet: list[dict[(i,j)->float]] from each model this step
         """
+
+        # 3) apply private rebalancing from the agents
+        fleets_info = []
+        for f, reb in zip(self.fleets, reb_actions_by_fleet):
+            fleet_info = {}
+            obs, rebreward, done, info = f.reb_step(reb)
+            fleet_info['rebalancing_cost'] = -rebreward
+            fleets_info.append(fleet_info)
+
+        self.time += 1
+
         # 1) market info
         D, P, T_pax = self._market_publish()
 
@@ -197,33 +219,30 @@ class CompetitionSim:
         price = self.compute_price_per_t()
         demand = self.compute_demand_per_t(D)
 
-        # 3) apply private rebalancing from the agents
-        for f, reb in zip(self.fleets, reb_actions_by_fleet):
-            f.reb_step(reb)
-
-        self.time += 1
-
         # 4) each fleet solves its own pax LP with its cap + shared price
         #    Implemented as Fleet.match_with_caps(caps, P) returning {(i,j):flow}
         # matched_list = []
-        for f, fleet_demand, fleet_price in zip(self.fleets, demand, price):
+        pax_return_vars = []
+        for f, fleet_demand, fleet_price, fleet_info in zip(self.fleets, demand, price, fleets_info):
             # flows = f.matching(fleet_demand, fleet_price)  # your LP (adapted from matching_pulp)
             # f.apply_pax(flows, T_pax, P)        # updates revenue/costs/private state
             # matched_list.append(flows)
-            f.pax_step(deepcopy(fleet_demand), deepcopy(fleet_price), self.travelTime)
+            obs, reward, done, info = f.pax_step(deepcopy(fleet_demand), deepcopy(fleet_price), self.travelTime)
+            # pax_return_vars.append((obs, reward, done, info))
+            fleet_info['profit'] = reward
 
 
         # 5) arrivals + time advance
         # for f in self.fleets:
         #     f.advance()
-        self.t += 1
+        # self.t += 1
         # self.allocator.step()
 
         done = (self.tf == self.time + 1)
         # collect per-fleet per-step info if needed
-        infos = [f.info.copy() for f in self.fleets]
-        return done, infos
-    
+        # infos = [f.info.copy() for f in self.fleets]
+        return done, fleets_info
+
     def compute_demand_per_t(self, demand_global_t):
         K = len(self.fleets)
         demand_per_firm = [defaultdict(float) for _ in range(K)]
@@ -256,7 +275,7 @@ class CompetitionSim:
             price_t = defaultdict(float)
             for (i,j) in self.demand:
                 base_price = self.price[i,j].get(self.t, 0.0)
-                price_t[self.t] = self.compute_price(i, j, self.t, base_price, pricing_model=f.pricing_model)
+                price_t[i,j] = self.compute_price(i, j, self.t, base_price, pricing_model=f.pricing_model)
             fleet_prices.append(price_t)
             f.price = price_t
         return fleet_prices

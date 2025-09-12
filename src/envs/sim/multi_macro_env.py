@@ -303,7 +303,7 @@ class AMoD:
         done = (self.tf == self.time+1) # if the episode is completed
         return obs, rew, done, info
     
-    def reset(self):
+    def reset(self, multi_agent = False):
         # reset the episode
         self.acc = defaultdict(dict)
         self.dacc = defaultdict(dict)
@@ -340,7 +340,12 @@ class AMoD:
          # TODO: define states here
         self.obs = (self.acc, self.time, self.dacc, self.demand)
 
-        obs, paxreward, done, info = self.pax_step(CPLEXPATH=self.cfg.cplexpath, PATH=self.cfg.directory)
+        if not multi_agent:
+            obs, paxreward, done, info = self.pax_step(CPLEXPATH=self.cfg.cplexpath, PATH=self.cfg.directory)
+        else:
+            paxreward = 0
+            done = False
+            obs = {}
         
         self.reward = 0
         return obs, paxreward
@@ -552,18 +557,18 @@ class Fleet:
             assert pax_served < self.acc[i][t+1] + 1e-3
             # acc - available vehicles in region, dacc - arriving vehicles in region, paxAction - number of vehicles with passengers
             pax_served = min(self.acc[i][t+1], pax_served) # Make sure action does not exceed available vehicles
-            self.paxFlow[i,j][t+self.demandTime[i,j][t]] = pax_served
+            self.paxFlow[i,j][t+travelTime[i,j][t]] = pax_served
             # paxFlow[(i,j)][t+travelTime[i,j][t]] = pax_served # vehicles with passengers flowing region i to region j considering the arrival time
             self.acc[i][t+1] -= pax_served # How many vehicles are left in region i at time t+1
             # Vehicles arriving to region j at t+travelTime[i,j][t] are available at the following time step
             # self.acc[j][t+travelTime[i,j][t]+1] += pax_served
             self.dacc[j][t+travelTime[i,j][t]] += pax_served # Adding in passenger vehicles to those arriving in region j at time t+self.demandTime[i,j][t]
             
-            profit = pax_served*(self.price[i,j][t] - travelTime[i,j][t]*self.beta) # profit is price - operating cost
+            profit = pax_served*(price[i,j] - travelTime[i,j][t]*self.beta) # profit is price - operating cost
 
             info["operating_cost"] += travelTime[i,j][t]*self.beta*pax_served
             info['served_demand'] += pax_served
-            info['revenue'] += pax_served*self.price[i,j][t]
+            info['revenue'] += pax_served*price[i,j]
             info['profit'] += profit
             info['reward'] += profit
 
@@ -582,20 +587,23 @@ class Fleet:
         reward = 0 # reward is calculated from before this to the next rebalancing, we may also have two rewards, one for pax matching and one for rebalancing
         self.rebAction = rebAction      
         # rebalancing
-        for k, (i,j) in enumerate(self.edges):
-            if (i,j) not in self.G.edges:
-                continue
-            # TODO: add check for actions respecting constraints? e.g. sum of all action[k] starting in "i" <= self.acc[i][t+1] (in addition to our agent action method)
-            # update the number of vehicles
-            rebased = min(self.acc[i][t+1], rebAction[k])
+        if rebAction is not None:
+            for k, (i,j) in enumerate(self.edges):
+                if (i,j) not in self.G.edges:
+                    continue
+                # TODO: add check for actions respecting constraints? e.g. sum of all action[k] starting in "i" <= self.acc[i][t+1] (in addition to our agent action method)
+                # update the number of vehicles
+                rebased = min(self.acc[i][t+1], rebAction[k])
 
-            self.rebFlow[i,j][t+self.rebTime[i,j][t]] = rebased       
-            self.acc[i][t+1] -= rebased
-            # self.dacc[j][t+self.rebTime[i,j][t]+1] += rebased
-            self.dacc[j][t+self.rebTime[i,j][t]] += rebased
-            info['rebalancing_cost'] += self.rebTime[i,j][t]*self.beta*rebased
-            info["operating_cost"] += self.rebTime[i,j][t]*self.beta*rebased
-            reward -= self.rebTime[i,j][t]*self.beta*rebased
+                self.rebFlow[i,j][t+self.rebTime[i,j][t]] = rebased       
+                self.acc[i][t+1] -= rebased
+                # self.dacc[j][t+self.rebTime[i,j][t]+1] += rebased
+                self.dacc[j][t+self.rebTime[i,j][t]] += rebased
+                info['rebalancing_cost'] += self.rebTime[i,j][t]*self.beta*rebased
+                info["operating_cost"] += self.rebTime[i,j][t]*self.beta*rebased
+                reward -= self.rebTime[i,j][t]*self.beta*rebased
+        else:
+            print("No rebalancing action provided, skipping rebalancing step")
         # arrival for the next time step, executed in the last state of a time step
         # this makes the code slightly different from the previous version, where the following codes are executed between matching and rebalancing        
         # for k, (i,j) in enumerate(self.rebFlow):

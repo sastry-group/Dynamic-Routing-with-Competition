@@ -30,6 +30,7 @@ importlib.reload(testing)
 config = {
     "simulator.name": "multi_macro",
     "model.name": ["sac", "equal_distribution", "random"],
+    # "model.name": ["sac"],
     "simulator.city": "nyc_brooklyn", 
     "model.cplexpath": None, 
     "model.test_episodes": 2,
