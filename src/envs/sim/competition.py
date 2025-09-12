@@ -120,12 +120,12 @@ class CompetitionSim:
         return D, P, T_pax
 
     def reset(self):
-        self.t = 0
+        self.time = 0
         # self.allocator.t = 0
         # Re-init each fleet’s private state (use your existing reset logic)
         for f in self.fleets:
             # do a light reset that preserves scenario but resets fleet state
-            f.t = 0
+            f.time = 0
             for n in f.regions:
                 f.acc[n] = {0: f.G.nodes[n]['accInit']}
                 f.dacc[n].clear()
@@ -201,6 +201,8 @@ class CompetitionSim:
         for f, reb in zip(self.fleets, reb_actions_by_fleet):
             f.reb_step(reb)
 
+        self.time += 1
+
         # 4) each fleet solves its own pax LP with its cap + shared price
         #    Implemented as Fleet.match_with_caps(caps, P) returning {(i,j):flow}
         # matched_list = []
@@ -217,7 +219,7 @@ class CompetitionSim:
         self.t += 1
         # self.allocator.step()
 
-        done = (self.t >= self.tf)
+        done = (self.tf == self.time + 1)
         # collect per-fleet per-step info if needed
         infos = [f.info.copy() for f in self.fleets]
         return done, infos

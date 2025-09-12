@@ -422,6 +422,7 @@ class Fleet:
 
 
         self.regions = list(self.G) # set of regions
+        self.nregion = len(self.regions)
         self.t = 0 # current time
         self.acc = defaultdict(dict) # number of vehicles within each region, key: i - region, t - time
         self.dacc = defaultdict(dict) # number of vehicles arriving at each region, key: i - region, t - time

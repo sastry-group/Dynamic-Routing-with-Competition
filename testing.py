@@ -205,7 +205,7 @@ def test_approach(cfg, env, parser, device):
 
     multi = cfg.simulator.firm_count 
 
-    if not multi or multi <= 1:
+    if not multi: # or multi <= 1:
         model = setup_model(cfg, env, parser, device)
         
         print(f'Testing model {cfg.model.name} on {cfg.simulator.name} environment')
@@ -285,20 +285,26 @@ def test_approach(cfg, env, parser, device):
         np.random.seed(seeds[i_episode])
         done = False
         sim.reset()
+        env.reset()
 
 
         while not done:
-            obs_list = [parser.parse_obs((f.acc, f.t, f.dacc, env.demand)).to(device) for f in fleets]
+            obs_list = [parser.parse_obs((f.acc, f.time, f.dacc, env.demand)).to(device) for f in sim.fleets]
 
             reb_actions = []
-            for k, f in enumerate(fleets):
-                a = models[k].select_action(obs_list[k], deterministic=True)
-                desiredAcc = {f.region[i]: int(a[i] * dictsum(f.acc, f.t + 1)) for i in range(len(f.region))}
-                reb = solveRebFlow(f, [], desiredAcc, "None")
-                reb_actions.append(reb)
+            for k, f in enumerate(sim.fleets):
+                if cfg.model.name == "sac":
+                    a = models[k].select_action(obs_list[k], deterministic=True)
+                    desiredAcc = {f.region[i]: int(a[i] * dictsum(f.acc, f.time + 1)) for i in range(len(f.region))}
+                    reb = solveRebFlow(f, [], desiredAcc, "None")
+                    reb_actions.append(reb)
+                elif cfg.model.name == "equal_distribution" or cfg.model.name == "random":
+                    reb = models[k].select_action(sim.fleets[k])
+                    reb_actions.append(reb)
 
             done, infos = sim.step(reb_actions)
 
+            env.time += 1
             eps_reward = [eps_reward[k] + infos[k].get("profit", 0.0) - infos[k].get("rebalancing_cost", 0.0) for k in range(K)]
             eps_served_demand = [eps_served_demand[k] + infos[k].get("profit", 0.0) for k in range(K)]
             eps_rebalancing_cost = [eps_rebalancing_cost[k] + infos[k].get("rebalancing_cost", 0.0) for k in range(K)]
