@@ -33,7 +33,7 @@ config = {
     "model.name": ["sac"],
     "simulator.city": "nyc_brooklyn", 
     "model.cplexpath": None, 
-    "model.test_episodes": 10,
+    "model.test_episodes": 1,
     "model.checkpoint_path": "SAC_portion_1_test_train",
     "simulator.reuse_no_control": False,
     "simulator.firm_count": 1,

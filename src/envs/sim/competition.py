@@ -113,12 +113,13 @@ class CompetitionSim:
         # shared total demand & price at time t
         # D = {(i, j): self.scenario.demand_input[i, j].get(self.t, 0.0)
         #      for (i, j) in self.scenario.edges}
-        D = {(i, j): self.demand[i, j].get(self.t, 0.0)
-             for (i, j) in self.scenario.edges}
-        P = {(i, j): self.price[i, j].get(self.t, 0.0)
-             for (i, j) in self.scenario.edges}
-        T_pax = {(i, j): self.travelTime[i, j].get(self.t, 0)
-                 for (i, j) in self.scenario.edges}
+        t = self.time
+        D = {(i, j): self.demand[i, j].get(t, 0.0)
+             for (i, j) in self.demand if self.demand[i,j][t]>1e-3}
+        P = {(i, j): self.price[i, j].get(t, 0.0)
+             for (i, j) in self.price if self.demand[i,j][t]>1e-3}
+        T_pax = {(i, j): self.travelTime[i, j].get(t, 0)
+                 for (i, j) in self.travelTime if self.demand[i,j][t]>1e-3}
         return D, P, T_pax
 
     def reset(self):
@@ -162,7 +163,7 @@ class CompetitionSim:
 
         # 2) deterministic demand split (no bidding)
         # demand = self.allocator.compute_demand(D)
-        price = self.compute_price_per_t()
+        price = self.compute_price_per_t(D)
         demand = self.compute_demand_per_t(D)
 
         # self.compute_price_per_t()
@@ -190,6 +191,7 @@ class CompetitionSim:
             # done.append(f.done)
             info.append(f.info)
             f.obs, rew, f.done, f.info = f.pax_step(d, p, self.travelTime)
+            print(f"Pax: {rew} -- Total: {rew}")
             paxreward.append(rew)
             f.reward = 0
         done = (self.tf == self.time+1)
@@ -216,7 +218,7 @@ class CompetitionSim:
 
         # 2) deterministic demand split (no bidding)
         # demand = self.allocator.compute_demand(D)
-        price = self.compute_price_per_t()
+        price = self.compute_price_per_t(D)
         demand = self.compute_demand_per_t(D)
 
         # 4) each fleet solves its own pax LP with its cap + shared price
@@ -237,6 +239,7 @@ class CompetitionSim:
         #     f.advance()
         # self.t += 1
         # self.allocator.step()
+        print(f"Rebalancing: {rebreward} -- Pax: {reward} -- Total: {reward+rebreward}")
 
         done = (self.tf == self.time + 1)
         # collect per-fleet per-step info if needed
@@ -269,13 +272,15 @@ class CompetitionSim:
                 demand_per_firm[k][(i, j)] = D * weights[i][k]
         return demand_per_firm
     
-    def compute_price_per_t(self):
+    def compute_price_per_t(self, demand_global_t):
         fleet_prices = []
         for f in self.fleets:
             price_t = defaultdict(float)
-            for (i,j) in self.demand:
-                base_price = self.price[i,j].get(self.t, 0.0)
-                price_t[i,j] = self.compute_price(i, j, self.t, base_price, pricing_model=f.pricing_model)
+            for (i,j) in demand_global_t.keys():
+                if demand_global_t[i,j]<1e-3:
+                    continue
+                base_price = self.price[i,j].get(self.time, 0.0)
+                price_t[i,j] = self.compute_price(i, j, self.time, base_price, pricing_model=f.pricing_model)
             fleet_prices.append(price_t)
             f.price = price_t
         return fleet_prices

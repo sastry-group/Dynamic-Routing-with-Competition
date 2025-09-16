@@ -301,6 +301,7 @@ class AMoD:
         info['profit'] = paxreward
         rew += paxreward
         done = (self.tf == self.time+1) # if the episode is completed
+        print(f"Rebalancing: {rebreward} -- Pax: {paxreward} -- Total: {rew}")
         return obs, rew, done, info
     
     def reset(self, multi_agent = False):
@@ -346,7 +347,9 @@ class AMoD:
             paxreward = 0
             done = False
             obs = {}
-        
+
+        print(f"Pax: {paxreward} -- Total: {paxreward}")
+
         self.reward = 0
         return obs, paxreward
    
@@ -418,7 +421,7 @@ class AMoD:
 
 class Fleet:
     def __init__(self, env, cfg, beta=0.2, firm_id=None, init_acc="equal"):
-        self.beta = beta
+        self.beta = env.beta
         self.scenario = env.scenario
         self.firm_id = firm_id  
         self.G = env.G
@@ -548,7 +551,7 @@ class Fleet:
 
         # paxFlow = 
         if paxAction is None:  # default matching algorithm used if isMatching is True, matching method will need the information of self.acc[t+1], therefore this part cannot be put forward
-            paxAction = self.matching(demand, price, fixed_price=False)
+            paxAction = self.matching(demand, price, fixed_price=True)
         for k, (i,j) in enumerate(self.edges):
             pax_served = paxAction[k]
             if (i,j) not in demand or pax_served < 1e-3:
@@ -572,9 +575,9 @@ class Fleet:
             info['profit'] += profit
             info['reward'] += profit
 
-        for k, (i,j) in enumerate(self.paxFlow):
-            if t in self.paxFlow[i,j]:
-                self.acc[j][t+1] += self.paxFlow[i,j][t]
+        # for k, (i,j) in enumerate(self.paxFlow):
+        #     if t in self.paxFlow[i,j]:
+        #         self.acc[j][t+1] += self.paxFlow[i,j][t]
 
         obs = (self.acc, self.time, self.dacc, demand) # for acc, the time index would be t+1, but for demand, the time index would be t
         done = False # if passenger matching is executed first
@@ -941,7 +944,7 @@ class GNNParser():
         x = torch.cat((
             torch.tensor([obs[0][n][self.env.time+1]*self.s for n in self.env.region]).view(1, 1, self.env.nregion).float(), 
 
-            torch.tensor([[(obs[0][n][self.env.time+1] + self.env.dacc[n][t])*self.s for n in self.env.region] \
+            torch.tensor([[(obs[0][n][self.env.time+1] + obs[2][n][t])*self.s for n in self.env.region] \
                           for t in range(self.env.time+1, self.env.time+self.T+1)]).view(1, self.T, self.env.nregion).float(), 
 
             torch.tensor([[sum([(self.env.scenario.demand_input[i,j][t]/demand_factor)*(self.env.price[i,j][t])*self.s \

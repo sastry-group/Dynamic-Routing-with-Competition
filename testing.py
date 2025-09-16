@@ -232,7 +232,7 @@ def test_approach(cfg, env, parser, device):
         mean_reward = round(mean_reward/1000,2)
         mean_served_demand = round(mean_served_demand/1000,2)
         mean_rebalancing_cost = round(mean_rebalancing_cost/1000,2)
-        rl_means = (mean_reward, mean_served_demand, mean_rebalancing_cost)
+        rl_means = [(mean_reward, mean_served_demand, mean_rebalancing_cost)]
 
         return rl_means, inflows
     
@@ -243,7 +243,9 @@ def test_approach(cfg, env, parser, device):
     test_episodes = cfg.model.test_episodes
     epochs = trange(test_episodes) 
     # 1) One Fleet env per firm from the SAME scenario
-    fleets = [Fleet(env, cfg, firm_id=f"firm_{k}", beta=0.2) for k in range(K)]
+    with open("src/envs/data/macro/calibrated_parameters.json", "r") as file:
+        calibrated_params = json.load(file)
+    fleets = [Fleet(env, cfg, firm_id=f"firm_{k}") for k in range(K)]
     for f in fleets:
         if not hasattr(f, "region") and hasattr(f, "regions"):
             f.region = f.regions
