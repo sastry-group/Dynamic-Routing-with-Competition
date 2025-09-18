@@ -417,7 +417,7 @@ def plot_multi_fleet_comparison(cfg, env, comparison_data):
             rects1 = ax.bar(start_x + ind*width, d, width, label=key, color=colors[ind])
             add_value_labels(rects1, ax) # Adding value labels to each bar
 
-    for ax in axs:
+    for firm_num, ax in enumerate(axs):
         # rects2 = ax.bar(start_x + (ind+1)*width, control_data, width, label='No Control', color=colors[-1])
         # add_value_labels(rects2, ax)
 
@@ -427,12 +427,12 @@ def plot_multi_fleet_comparison(cfg, env, comparison_data):
         if cfg.simulator.firm_count == 1:
             ax.set_title(f'Comparison on {cfg.simulator.city} Environment with 1 Firm')
         else:
-            ax.set_title(f'Comparison on {cfg.simulator.city} Environment with {cfg.simulator.firm_count} Firms')
+            ax.set_title(f'Firm {firm_num+1}')
         ax.set_xticks(x)
-        ax.set_xticklabels(labels)
+        ax.set_xticklabels(labels, rotation=45, ha='right')
         ax.legend()
 
-    #plt.tight_layout()
+    plt.tight_layout()
     plt.grid(True, axis='y', linestyle='--', alpha=0.7)
 
     # if cfg.simulator.city != 'nyc_brooklyn': 
