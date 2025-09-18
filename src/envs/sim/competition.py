@@ -91,6 +91,7 @@ class CompetitionSim:
         self.fleets = fleets
         # self.allocator = allocator
         self.t = 0
+        self.time = 0
         self.tf = scenario.tf
         self.demand = defaultdict(dict) # demand
         self.price = defaultdict(dict) # price
@@ -147,7 +148,7 @@ class CompetitionSim:
 
         # we might need to modify this
         # tripAttr = self.scenario.get_random_demand(reset=True)
-        self.regionDemand= defaultdict(dict)
+        # self.regionDemand= defaultdict(dict)
         for i,j,t,d,p in self.scenario.tripAttr: # trip attribute (origin, destination, time of request, demand, price)
             self.demand[i,j][t] = d # self.allocator.compute_demand(tripAttr)
             self.price[i,j][t] = p # self.allocator.compute_price(i,j,t,p,self.cfg.pricing_model)

@@ -78,6 +78,7 @@ def setup_multi_macro(cfg):
         supply_factor = cfg.firm_count
     else:
         supply_factor = 1
+    # supply_factor = 1 # For competition format, env now has full number of vehs
     scenario = Scenario(
         json_file=f"src/envs/data/macro/scenario_{city}.json",
         demand_ratio=calibrated_params[city]["demand_ratio"],
@@ -140,10 +141,25 @@ def multi_test(input_config):
     '''
     for Colab tutorial
     '''
+    # We always need a control!
+    if "no_rebalancing" not in input_config["model.name"]:
+        input_config["model.name"].append("no_rebalancing")
     multi_config = [{**copy.deepcopy(input_config), "model.name" : model} for model in input_config["model.name"]]
 
     data = [{}, {}]
     for config in multi_config:
+
+        if config["model.name"] == "no_rebalancing" and cfg.simulator.reuse_no_control:
+            path = f'./src/envs/data/{cfg.simulator.name}/{cfg.simulator.city}_no_control_performance.json'
+            #check if path exists
+            if os.path.exists(path):
+                with open(path, 'r') as f:
+                    no_control_performance = json.load(f)
+                no_reb_reward = no_control_performance['reward']
+                no_reb_demand = no_control_performance['served_demand']
+                no_reb_cost = no_control_performance['rebalancing_cost']
+                data[0][config["model.name"]], data[1][config['model.name']] = (no_reb_reward, no_reb_demand, no_reb_cost), None
+            continue
 
         with initialize(config_path="src/config"):
             cfg = compose(config_name="config", overrides= [f"{key}={value}" for key, value in config.items()])  # Load the configuration
@@ -165,9 +181,13 @@ def multi_test(input_config):
         profit, inflows = test_approach(cfg, env, parser, device)
         data[0][config["model.name"]], data[1][config['model.name']] = profit, inflows
 
-    control_data = get_no_control_performance(cfg, env, parser, device, use_saved_data=cfg.simulator.reuse_no_control)
+    # no_ctrl_cfg = ...
+    # no_ctrl_env = ...
+    # no_ctrl_parser = ...
+    # no_ctrl_device = device = torch.device("cuda" if use_cuda else "cpu")
+    # control_data = get_no_control_performance(cfg, no_ctrl_env, no_ctrl_parser, no_ctrl_device, use_saved_data=cfg.simulator.reuse_no_control)
 
-    plot_multi_fleet_comparison(cfg, env, control_data, data)
+    plot_multi_fleet_comparison(cfg, env, data)
 
 def save_vehicle_distribution(acc, file_str=None):
     """
@@ -304,7 +324,7 @@ def test_approach(cfg, env, parser, device):
                     desiredAcc = {f.region[i]: int(a[i] * dictsum(f.acc, f.time + 1)) for i in range(len(f.region))}
                     reb = solveRebFlow(f, [], desiredAcc, "None")
                     reb_actions.append(reb)
-                elif cfg.model.name == "equal_distribution" or cfg.model.name == "random":
+                elif cfg.model.name == "equal_distribution" or cfg.model.name == "random" or cfg.model.name == "no_rebalancing":
                     reb = models[k].select_action(sim.fleets[k])
                     reb_actions.append(reb)
 
@@ -340,7 +360,7 @@ def test_approach(cfg, env, parser, device):
     return rl_means_per_fleet, inflows_per_fleet
     
 
-def get_no_control_performance(cfg, env, parser, device, use_saved_data=False):
+def get_no_control_performance(cfg, env, parser, device, setup_model_fn=setup_model, use_saved_data=False):
     #check if no_control performance is saved
     path = f'./src/envs/data/{cfg.simulator.name}/{cfg.simulator.city}_no_control_performance.json'
     #check if path exists
@@ -354,7 +374,7 @@ def get_no_control_performance(cfg, env, parser, device, use_saved_data=False):
         print('No control performance not found. Calculating (this happens only the first time on a new environment)...')
         cfg_copy = cfg.copy()
         cfg_copy.model.name = 'no_rebalancing'
-        model = setup_model(cfg_copy, env, parser, device)
+        model = setup_model_fn(cfg_copy, env, parser, device)
         no_reb_reward, no_reb_demand, no_reb_cost, _ = model.test(10, env)
         no_reb_reward = round(np.mean(no_reb_reward)/1000,2)
         no_reb_demand = round(np.mean(no_reb_demand)/1000,2)
@@ -367,7 +387,7 @@ def get_no_control_performance(cfg, env, parser, device, use_saved_data=False):
     
     return (no_reb_reward, no_reb_demand, no_reb_cost)
     
-def plot_multi_fleet_comparison(cfg, env, control_data, comparison_data):
+def plot_multi_fleet_comparison(cfg, env, comparison_data):
     # Function to add value labels on top of bars
     def add_value_labels(rects, ax):
         for rect in rects:
@@ -398,8 +418,8 @@ def plot_multi_fleet_comparison(cfg, env, control_data, comparison_data):
             add_value_labels(rects1, ax) # Adding value labels to each bar
 
     for ax in axs:
-        rects2 = ax.bar(start_x + (ind+1)*width, control_data, width, label='No Control', color=colors[-1])
-        add_value_labels(rects2, ax)
+        # rects2 = ax.bar(start_x + (ind+1)*width, control_data, width, label='No Control', color=colors[-1])
+        # add_value_labels(rects2, ax)
 
         # Add some text for labels, title and custom x-axis tick labels, etc.
         ax.set_xlabel('Metrics')

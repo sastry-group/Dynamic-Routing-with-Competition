@@ -343,12 +343,12 @@ class AMoD:
 
         if not multi_agent:
             obs, paxreward, done, info = self.pax_step(CPLEXPATH=self.cfg.cplexpath, PATH=self.cfg.directory)
+            print(f"Pax: {paxreward} -- Total: {paxreward}")
         else:
             paxreward = 0
             done = False
             obs = {}
 
-        print(f"Pax: {paxreward} -- Total: {paxreward}")
 
         self.reward = 0
         return obs, paxreward
@@ -425,6 +425,7 @@ class Fleet:
         self.scenario = env.scenario
         self.firm_id = firm_id  
         self.G = env.G
+        self.G_dist = self.scenario.G
         self.firm_count = cfg.simulator.firm_count
         self.rebTime = self.scenario.rebTime
 
@@ -451,7 +452,9 @@ class Fleet:
         self.time = 0
         if init_acc == "equal":
             for n in self.regions:
-                self.acc[n][0] = int(self.G.nodes[n]['accInit'] // self.firm_count)
+                self.acc[n][0] = int(self.G_dist.nodes[n]['accInit'])
+                # self.acc[n][0] = int(self.G.nodes[n]['accInit'] // self.firm_count)
+                # self.G.nodes[n]['accInit'] = int(self.G.nodes[n]['accInit'])
                 # self.acc[n][0] = int(init_acc.get(n, 0))
                 self.dacc[n] = defaultdict(float)
 
@@ -646,7 +649,7 @@ class Fleet:
             self.rebFlow[i,j] = defaultdict(float)
             self.paxFlow[i,j] = defaultdict(float) 
         for n in self.G:
-            self.acc[n][0] = self.G.nodes[n]['accInit']
+            self.acc[n][0] = self.G_dist.nodes[n]['accInit']
             self.dacc[n] = defaultdict(float) 
         # self.obs = (self.acc, self.time, self.dacc, self.demand)
         obs, paxreward, done, info = self.pax_step(CPLEXPATH=self.cfg.cplexpath, PATH=self.cfg.directory)
@@ -772,10 +775,12 @@ class Scenario:
                 self.rebTime[i,j] = 1
                 
 
-            if demand_filter_type == 'portion':
-                scale = 1
-            else:
-                scale = firm_count
+            # DEMAND IS NO LONGER DIVIDED BY FIRM COUNT IN SCENARIO
+            # if demand_filter_type == 'portion':
+            #     scale = 1
+            # else:
+            #     scale = firm_count
+            scale = 1
                 
 
             
@@ -848,7 +853,7 @@ class Scenario:
                     hr, acc = item["hour"], item["acc"]
                     if hr == json_hr+int(round(json_tstep/2*tf/60)):
                         for n in self.G.nodes:
-                            self.G.nodes[n]['accInit'] = round(int(acc/len(self.G))/supply_factor)
+                            self.G.nodes[n]['accInit'] = int(acc/len(self.G)) // supply_factor
             self.tripAttr = self.get_random_demand()
                 
         
@@ -937,6 +942,7 @@ class GNNParser():
             demand_factor = self.env.cfg.firm_count
         else:
             demand_factor = 1
+        # demand_factor = 1
             
         # obs[0] is the state how many vehicles in each region
         # self.s = 0.01 scale factor
