@@ -342,8 +342,9 @@ def test_approach(cfg, env, parser, device):
             episode_reb_cost[k].append(eps_rebalancing_cost[k])
 
             inflow_vec = np.zeros(len(f.region))
-            for idx, (i, j) in enumerate(f.edges):
-                inflow_vec[j] += reb_actions[k][idx]
+            if reb_actions[k] is not None:
+                for idx, (i, j) in enumerate(f.edges):
+                    inflow_vec[j] += reb_actions[k][idx]
             episode_inflows[k].append(inflow_vec)
 
 

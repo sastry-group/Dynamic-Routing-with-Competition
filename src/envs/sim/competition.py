@@ -2,6 +2,7 @@
 from collections import defaultdict
 from copy import deepcopy
 from src.misc.utils import dictsum
+import math
 
 
 # class Allocator:
@@ -84,7 +85,9 @@ class CompetitionSim:
     This class drives the episode and queries each model for actions.
     """
     def __init__(self, scenario, fleets):
-        self.rule="equal"
+        # self.rule="equal"
+        self.rule = "cournot"
+        self.pricing_model = "cournot"
         self.eps=1e-9
         self.scenario = scenario
         self.travelTime = self.scenario.demandTime
@@ -104,6 +107,7 @@ class CompetitionSim:
             # self.arrDemand[i][t+self.demandTime[i,j][t]] += d
         self.G = scenario.G
         self.edges = []
+        self.beta = 0.3 # sensitivity parameter for price computation
         for i in self.G:
             self.edges.append((i,i))
             for e in self.G.out_edges(i):
@@ -164,8 +168,8 @@ class CompetitionSim:
 
         # 2) deterministic demand split (no bidding)
         # demand = self.allocator.compute_demand(D)
-        price = self.compute_price_per_t(D)
-        demand = self.compute_demand_per_t(D)
+        prices = self.compute_price_per_t(D)
+        demand = self.compute_demand_per_t(D, prices)
 
         # self.compute_price_per_t()
         
@@ -174,7 +178,7 @@ class CompetitionSim:
         paxreward = []
         done = []
         info = []
-        for f, d, p in zip(self.fleets, demand, price):
+        for f, d, p in zip(self.fleets, demand, prices):
             for i,j in self.G.edges:
                 f.rebFlow[i,j] = defaultdict(float)
                 f.paxFlow[i,j] = defaultdict(float)            
@@ -219,14 +223,14 @@ class CompetitionSim:
 
         # 2) deterministic demand split (no bidding)
         # demand = self.allocator.compute_demand(D)
-        price = self.compute_price_per_t(D)
-        demand = self.compute_demand_per_t(D)
+        prices = self.compute_price_per_t(D)
+        demand = self.compute_demand_per_t(D, prices)
 
         # 4) each fleet solves its own pax LP with its cap + shared price
         #    Implemented as Fleet.match_with_caps(caps, P) returning {(i,j):flow}
         # matched_list = []
         pax_return_vars = []
-        for f, fleet_demand, fleet_price, fleet_info in zip(self.fleets, demand, price, fleets_info):
+        for f, fleet_demand, fleet_price, fleet_info in zip(self.fleets, demand, prices, fleets_info):
             # flows = f.matching(fleet_demand, fleet_price)  # your LP (adapted from matching_pulp)
             # f.apply_pax(flows, T_pax, P)        # updates revenue/costs/private state
             # matched_list.append(flows)
@@ -247,7 +251,7 @@ class CompetitionSim:
         # infos = [f.info.copy() for f in self.fleets]
         return done, fleets_info
 
-    def compute_demand_per_t(self, demand_global_t):
+    def compute_demand_per_t(self, demand_global_t, prices):
         K = len(self.fleets)
         demand_per_firm = [defaultdict(float) for _ in range(K)]
         if self.rule == "equal":
@@ -258,19 +262,27 @@ class CompetitionSim:
             return demand_per_firm
 
         # as a function of price 
-        origins = {i for (i, _) in demand_global_t.keys()}
-        weights = {i: [] for i in origins}
-        for i in origins:
-            accs = []
-            for f in self.fleets:
-                acc_i = f.acc[i].get(self.t+1, f.acc[i].get(self.t, 0.0))
-                accs.append(max(0.0, acc_i))
-            S = sum(accs) + self.eps
-            weights[i] = [a / S for a in accs]
-
         for (i, j), D in demand_global_t.items():
+            denom = sum([math.exp(-self.beta * prices[k][i,j]) for k in range(K)]) + self.eps
             for k in range(K):
-                demand_per_firm[k][(i, j)] = D * weights[i][k]
+                numer = math.exp(-self.beta * prices[k][i,j])
+                demand_per_firm[k][(i, j)] = D * (numer / denom)
+
+        # What is this?
+        # origins = {i for (i, _) in demand_global_t.keys()}
+        # weights = {i: [] for i in origins}
+        # for i in origins:
+        #     accs = []
+        #     for f in self.fleets:
+        #         acc_i = f.acc[i].get(self.t+1, f.acc[i].get(self.t, 0.0))
+        #         accs.append(max(0.0, acc_i))
+        #     S = sum(accs) + self.eps
+        #     weights[i] = [a / S for a in accs]
+
+        # for (i, j), D in demand_global_t.items():
+        #     for k in range(K):
+        #         demand_per_firm[k][(i, j)] = D * weights[i][k]
+
         return demand_per_firm
     
     def compute_price_per_t(self, demand_global_t):
@@ -281,15 +293,15 @@ class CompetitionSim:
                 if demand_global_t[i,j]<1e-3:
                     continue
                 base_price = self.price[i,j].get(self.time, 0.0)
-                price_t[i,j] = self.compute_price(i, j, self.time, base_price, pricing_model=f.pricing_model)
+                price_t[i,j] = f.compute_price(i, j, self.time, base_price, pricing_model=f.pricing_model)
             fleet_prices.append(price_t)
             f.price = price_t
         return fleet_prices
 
-    def compute_price(self, i, j, t, base_price, pricing_model):
+    def compute_price(self, i, j, t, alpha, base_price):
         # print(pricing_model)
         # model: "cournot", "bertrand", "exogenous"
-        if pricing_model == "cournot":
+        if self.pricing_model == "cournot":
             # Prices are being treated as equal per i across all destinations j
             try:
                 q_total = sum(self.fleets[f].acc[i][t] for f in range(self.firm_count))
@@ -298,16 +310,11 @@ class CompetitionSim:
             if q_total <= 0:
                 return base_price 
 
-            # supply, number of initial vehicles (constant right now)
-            # chekcing the q_total with total_Supplu
-            a = base_price 
-            alpha = 0.1
+            a = 2 * base_price  # Should this really be 2x?
             b = alpha * a * (1 / q_total)
             cournot_price = a - b * q_total
             # print(supply, q_total, p) # or current planned quantity
             # print(f"Cournot price for edge ({i},{j}) at time {t}: {cournot_price}, and p,q: {p}, {q_total}")
             return cournot_price
-        elif pricing_model == "bertrand":
-            return base_price
         else:
             return base_price

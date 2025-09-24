@@ -12,6 +12,8 @@ from pulp import LpMaximize, LpProblem, LpVariable, lpSum, LpStatus, value
 import pulp
 import os
 from datetime import datetime
+import random
+import sys
 
 
 class AMoD:
@@ -438,8 +440,6 @@ class Fleet:
         self.rebFlow = defaultdict(dict)
         self.paxFlow = defaultdict(dict)
 
-
-
         self.edges = []
         for i in self.G:
             self.edges.append((i,i))
@@ -458,12 +458,17 @@ class Fleet:
                 # self.acc[n][0] = int(init_acc.get(n, 0))
                 self.dacc[n] = defaultdict(float)
 
+        # Pricing parameters
+        self.alpha = random.uniform(sys.float_info.epsilon, 1 - sys.float_info.epsilon)
+        self.max_supply = sum([self.acc[n][0] for n in self.regions])
+        print("Fleet max supply:", self.max_supply)
+
         for e in self.G.edges:
             self.rebFlow[e] = defaultdict(float)
         for e in self.edges:
             self.paxFlow[e] = defaultdict(float)
 
-        self.pricing_model = "equal"
+        self.pricing_model = "cournot"
         self.info = dict.fromkeys(['revenue','served_demand','rebalancing_cost','operating_cost','profit'], 0.0)
 
 
@@ -527,23 +532,23 @@ class Fleet:
             print(f"Optimization failed with status: {LpStatus[status]}")
             return None
         
-    def compute_price(self, i, j, t, p, d, pricing_model):
+    def compute_price(self, i, j, t, price, pricing_model):
         # print(pricing_model)
         # model: "cournot", "bertrand", "exogenous"
         if pricing_model == "cournot":
             # test for now, we could use historical demand-price
-            supply = self.acc[i][t]  # total supply at time t+1 # CHECK
-            q_total = supply * self.firm_count # supply, number of initial vehicles (constant right now)
-            a = 2*p 
-            b = 0.1  # slope  # match the overleaf
-            cournot_price = max(0.0, a - b * q_total)
+            num_vehs_i = self.acc[i][t]  # total supply at time t+1 # CHECK
+            # supply, number of initial vehicles (constant right now)
+            a = price
+            b = self.alpha * a * (1 / self.max_supply)
+            cournot_price = max(0.0, a - b * num_vehs_i)
             # print(supply, q_total, p) # or current planned quantity
             # print(f"Cournot price for edge ({i},{j}) at time {t}: {cournot_price}, and p,q: {p}, {q_total}")
             return cournot_price
         elif pricing_model == "bertrand":
-            return p
+            return price
         else:
-            return p
+            return price
         
     # pax step
     def pax_step(self, demand, price, travelTime, paxAction=None, CPLEXPATH=None, PATH='', platform ='linux'):
