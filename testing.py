@@ -289,7 +289,7 @@ def test_approach(cfg, env, parser, device):
     # rl_means = [[] for _ in range(K)]
     # inflows = [[] for _ in range(K)]
     seeds = list(range(env.cfg.seed, env.cfg.seed + test_episodes+1))
-
+    historical_demand_totals = [defaultdict(lambda: defaultdict(float)) for _ in range(K)]
 
     for i_episode in epochs:
         eps_reward = [0] * K
@@ -334,7 +334,7 @@ def test_approach(cfg, env, parser, device):
             eps_served_demand = [eps_served_demand[k] + infos[k].get("profit", 0.0) for k in range(K)]
             eps_rebalancing_cost = [eps_rebalancing_cost[k] + infos[k].get("rebalancing_cost", 0.0) for k in range(K)]
 
-        for k, f in enumerate(fleets):
+        for k in range(K):
             # info = infos[k]
             # net = info.get("profit", 0.0) - info.get("rebalancing_cost", 0.0)
             episode_rewards[k].append(eps_reward[k])
@@ -346,6 +346,21 @@ def test_approach(cfg, env, parser, device):
                 for idx, (i, j) in enumerate(f.edges):
                     inflow_vec[j] += reb_actions[k][idx]
             episode_inflows[k].append(inflow_vec)
+
+        for k in range(K):
+            for t, demand_dict in sim.historical_demand.items():
+                fleet_demand = demand_dict[k]
+                for (i,j), d in fleet_demand.items():
+                    historical_demand_totals[k][(i,j)][t] += d
+
+    # Average the historical demand over episodes
+    historical_demand = deepcopy(historical_demand_totals)
+    for k, f in enumerate(fleets):
+        for (i,j), t_dict in historical_demand[k].items():
+            for t, d in t_dict.items():
+                historical_demand[k][(i,j)][t] = d / test_episodes
+    print("Average historical demand per episode:", historical_demand)
+    
 
 
     rl_means_per_fleet = []

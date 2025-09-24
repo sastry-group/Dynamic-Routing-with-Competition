@@ -105,6 +105,7 @@ class CompetitionSim:
             self.price[i,j][t] = p
             # self.depDemand[i][t] += d
             # self.arrDemand[i][t+self.demandTime[i,j][t]] += d
+        print(f"Initial demand: {self.demand}")
         self.G = scenario.G
         self.edges = []
         self.beta = 0.3 # sensitivity parameter for price computation
@@ -113,6 +114,7 @@ class CompetitionSim:
             for e in self.G.out_edges(i):
                 self.edges.append(e)
         self.edges = list(set(self.edges))
+        self.historical_demand = {} # store historical demand for use in training loop
 
     def _market_publish(self):
         # shared total demand & price at time t
@@ -171,6 +173,10 @@ class CompetitionSim:
         prices = self.compute_price_per_t(D)
         demand = self.compute_demand_per_t(D, prices)
 
+        self.historical_demand = {}
+        if self.time in self.historical_demand.keys():
+            raise ValueError("Demand for time t already exists in historical_demand")
+        self.historical_demand[self.time] = demand
         # self.compute_price_per_t()
         
         self.time = 0
@@ -200,6 +206,7 @@ class CompetitionSim:
             paxreward.append(rew)
             f.reward = 0
         done = (self.tf == self.time+1)
+
         return obs, paxreward
 
 
@@ -225,6 +232,10 @@ class CompetitionSim:
         # demand = self.allocator.compute_demand(D)
         prices = self.compute_price_per_t(D)
         demand = self.compute_demand_per_t(D, prices)
+
+        if self.time in self.historical_demand.keys():
+            raise ValueError("Demand for time t already exists in historical_demand")
+        self.historical_demand[self.time] = demand
 
         # 4) each fleet solves its own pax LP with its cap + shared price
         #    Implemented as Fleet.match_with_caps(caps, P) returning {(i,j):flow}
