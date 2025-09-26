@@ -12,6 +12,8 @@ beta: 0.5  # Cost of rebalancing (default: 0.5)
 
 city: "nyc_brooklyn"  # Defines city to train on
 
+demand: "nyc_brooklyn"
+
 max_steps: 20  # Number of steps per episode (default: T=20)
 
 time_horizon: 6  # Steps in the future for demand and arriving vehicle forecast (default: 6 min)

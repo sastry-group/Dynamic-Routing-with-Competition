@@ -74,17 +74,27 @@ def setup_multi_macro(cfg):
         cfg.simulator.directory = f"{cfg.model.name}/{cfg.simulator.city}"
     cfg = cfg.simulator
     city = cfg.city
+    demand_file = cfg.demand
     if cfg.constant_vehicle_count:
         supply_factor = cfg.firm_count
     else:
         supply_factor = 1
+    cfg.demand_ratio = calibrated_params[city]["demand_ratio"]
+    # cfg["json_tstep"] = calibrated_params[city]["test_tstep"]
+    cfg.json_tsetp = calibrated_params[city]["test_tstep"]
     # supply_factor = 1 # For competition format, env now has full number of vehs
+    if demand_file == city:
+        json_file = f"src/envs/data/multi_macro/scenario_{city}.json"
+    else:
+        json_file = f"saved_files/{demand_file}.json"
     scenario = Scenario(
-        json_file=f"src/envs/data/macro/scenario_{city}.json",
-        demand_ratio=calibrated_params[city]["demand_ratio"],
+        # json_file=f"saved_files/scenario_{demand_file}.json",
+        # json_file=f"src/envs/data/multi_macro/scenario_{city}.json",
+        json_file=json_file,
+        demand_ratio=cfg.demand_ratio,
         json_hr=calibrated_params[city]["json_hr"],
         sd=cfg.seed,
-        json_tstep=calibrated_params[city]["test_tstep"],
+        json_tstep=cfg.json_tsetp,
         tf=cfg.max_steps,
         supply_factor=supply_factor,
         firm_count=cfg.firm_count,
@@ -146,7 +156,7 @@ def multi_test(input_config):
         input_config["model.name"].append("no_rebalancing")
     multi_config = [{**copy.deepcopy(input_config), "model.name" : model} for model in input_config["model.name"]]
 
-    data = [{}, {}]
+    data = [{}, {}, {}]
     for config in multi_config:
 
         if config["model.name"] == "no_rebalancing" and cfg.simulator.reuse_no_control:
@@ -178,8 +188,8 @@ def multi_test(input_config):
         use_cuda = not cfg.model.no_cuda and torch.cuda.is_available()
         device = torch.device("cuda" if use_cuda else "cpu")
 
-        profit, inflows = test_approach(cfg, env, parser, device)
-        data[0][config["model.name"]], data[1][config['model.name']] = profit, inflows
+        (profit, inflows), file_names = test_approach(cfg, env, parser, device, loop_number=config["model.loop_number"], name=f"_{config["model.name"]}")
+        data[0][config["model.name"]], data[1][config['model.name']], data[2][config['model.name']] = profit, inflows, file_names
 
     # no_ctrl_cfg = ...
     # no_ctrl_env = ...
@@ -188,6 +198,8 @@ def multi_test(input_config):
     # control_data = get_no_control_performance(cfg, no_ctrl_env, no_ctrl_parser, no_ctrl_device, use_saved_data=cfg.simulator.reuse_no_control)
 
     plot_multi_fleet_comparison(cfg, env, data)
+
+    return data
 
 def save_vehicle_distribution(acc, file_str=None):
     """
@@ -221,7 +233,8 @@ def save_sampled_demand(tripAttr, filename=None):
         print(f'Saving sampled demand to saved_files/sample_demand_{filename}.json')
         json.dump(tripAttr, f, indent=4)
         
-def test_approach(cfg, env, parser, device):
+
+def test_approach(cfg, env, parser, device, loop_number=0, name=""):
 
     multi = cfg.simulator.firm_count 
 
@@ -290,6 +303,7 @@ def test_approach(cfg, env, parser, device):
     # inflows = [[] for _ in range(K)]
     seeds = list(range(env.cfg.seed, env.cfg.seed + test_episodes+1))
     historical_demand_totals = [defaultdict(lambda: defaultdict(float)) for _ in range(K)]
+    historical_price_totals = [defaultdict(lambda: defaultdict(float)) for _ in range(K)]
 
     for i_episode in epochs:
         eps_reward = [0] * K
@@ -352,19 +366,43 @@ def test_approach(cfg, env, parser, device):
                 fleet_demand = demand_dict[k]
                 for (i,j), d in fleet_demand.items():
                     historical_demand_totals[k][(i,j)][t] += d
+            for t, price_dict in sim.historical_prices.items():
+                fleet_prices = price_dict[k]
+                for (i,j), p in fleet_prices.items():
+                    historical_price_totals[k][(i,j)][t] += p
 
     # Average the historical demand over episodes
     historical_demand = deepcopy(historical_demand_totals)
     for k, f in enumerate(fleets):
         for (i,j), t_dict in historical_demand[k].items():
             for t, d in t_dict.items():
-                historical_demand[k][(i,j)][t] = d / test_episodes
+                historical_demand[k][(i,j)][t] = d / test_episodes / env.cfg.demand_ratio
     print("Average historical demand per episode:", historical_demand)
-    
+    # Average the historical prices over episodes
+    historical_prices = deepcopy(historical_price_totals)
+    for k, f in enumerate(fleets):
+        for (i,j), t_dict in historical_prices[k].items():
+            for t, p in t_dict.items():
+                historical_prices[k][(i,j)][t] = p / test_episodes
+    print("Average historical prices per episode:", historical_prices)
 
+    json_file = f"src/envs/data/multi_macro/scenario_{cfg.simulator.city}.json"
+    with open(json_file, 'r') as file:
+        data = json.load(file)
+    extra_save_data = {"nlat": data["nlat"], "nlon": data["nlon"], "totalAcc": data["totalAcc"], "rebTime": data["rebTime"], "topology_graph": data["topology_graph"]}
+
+    # Write historical demand and prices data to files
+    formatted_data = convert({"demand":historical_demand, "prices": historical_prices}, sim, json_start=env.scenario.json_start, json_tstep=cfg.simulator.json_tsetp, extra_data=extra_save_data)
+    file_names = []
+    for k in range(K):
+        file_name = f'saved_files/historical_demand{name}_firm_{k}_{loop_number}.json'
+        with open(file_name, 'w') as f:
+            json.dump(formatted_data[k], f, indent=4)
+        print(f'Saved historical demand for firm {k} to {file_name}')
+        file_names.append(file_name)
 
     rl_means_per_fleet = []
-    inflows_per_fleet  = []
+    inflows_per_fleet = []
     for k in range(K):
         r  = np.sum(episode_rewards[k]) / max(1, test_episodes)
         sd = np.sum(episode_served[k])  / max(1, test_episodes)
@@ -373,8 +411,45 @@ def test_approach(cfg, env, parser, device):
 
         inflows_per_fleet.append(np.mean(np.stack(episode_inflows[k], axis=0), axis=0))
 
-    return rl_means_per_fleet, inflows_per_fleet
-    
+    return (rl_means_per_fleet, inflows_per_fleet), file_names
+
+
+def convert(data, sim, json_start=0, json_tstep=1, extra_data=None):
+    result = []
+    for demand, prices, f in zip(data["demand"], data["prices"], sim.fleets):
+        firm_result = []
+        for (i,j) in f.edges:
+        # for origin, destination in demand.keys():
+            default_demand = sim.demand[i,j]
+            default_prices = sim.price[i,j]
+            if (i,j) not in demand:
+                inner_demand = default_demand
+                inner_prices = default_prices
+            else:
+                inner_demand = demand[(i, j)]
+                inner_prices = prices[(i, j)]
+            for time_stamp in default_demand.keys():
+                if time_stamp not in inner_demand:
+                    inner_demand[time_stamp] = default_demand[time_stamp]
+                    inner_prices[time_stamp] = default_prices[time_stamp]
+                firm_result.append({
+                    "time_stamp": time_stamp*json_tstep + json_start,
+                    "origin": i,
+                    "destination": j,
+                    "demand": inner_demand[time_stamp],
+                    "travel_time": sim.travelTime[(i,j)][time_stamp],
+                    "price": inner_prices[time_stamp]
+                })
+        firm_result = {"nlat": sim.scenario.N1, "nlon": sim.scenario.N2, "demand": firm_result}
+        if extra_data is not None:
+            firm_result.update(extra_data)
+        result.append(firm_result)
+        
+        # result.append({"demand": firm_result, "nlon": data["nlon"], "nlat": data["nlat"]})
+        # result["nlat"] = data["nlat"]
+        #         self.N2 = data["nlon"]
+    return result
+
 
 def get_no_control_performance(cfg, env, parser, device, setup_model_fn=setup_model, use_saved_data=False):
     #check if no_control performance is saved
@@ -414,7 +489,7 @@ def plot_multi_fleet_comparison(cfg, env, comparison_data):
                         textcoords="offset points",
                         ha='center', va='bottom')
 
-    profit_data, inflows = comparison_data
+    profit_data, inflows, _ = comparison_data
     labels = ['Overall Profit', 'Served Demand Profit', 'Rebalancing Cost']
     x = np.arange(len(labels))  # the label locations
     width = 0.15  # the width of the bars

@@ -58,23 +58,34 @@ def setup_multi_macro(cfg):
 
     cfg = cfg.simulator
     city = cfg.city
-    
+    demand_file = cfg.demand
      
     if cfg.constant_vehicle_count:
         supply_factor = cfg.firm_count
     else:
         supply_factor = 1
     # demand_filter_type = cfg.demand_filter_type
+
+    cfg.demand_ratio = calibrated_params[city]["demand_ratio"]
+    cfg.json_tsetp = calibrated_params[city]["test_tstep"]
+
+    if demand_file == city:
+        json_file = f"src/envs/data/multi_macro/scenario_{city}.json"
+    else:
+        json_file = f"saved_files/{demand_file}.json"
+
     scenario = Scenario(
-        json_file=f"src/envs/data/multi_macro/scenario_{city}.json",
-        demand_ratio=calibrated_params[city]["demand_ratio"],
+        json_file=json_file,
+        demand_ratio=cfg.demand_ratio,
         json_hr=calibrated_params[city]["json_hr"],
         sd=cfg.seed,
-        json_tstep=calibrated_params[city]["test_tstep"],
+        json_tstep=cfg.json_tsetp,
         tf=cfg.max_steps,
         supply_factor=supply_factor,
         firm_count=cfg.firm_count,
-        demand_filter_type = cfg.demand_filter_type
+        demand_filter_type = cfg.demand_filter_type,
+        initial_vehicle_distribution= cfg.initial_vehicle_distribution,
+        pricing_model= cfg.pricing_model
     )
     env = AMoD(scenario, cfg = cfg, beta = calibrated_params[city]["beta"])
     parser = GNNParser(env, T=cfg.time_horizon, json_file=f"src/envs/data/multi_macro/scenario_{city}.json")

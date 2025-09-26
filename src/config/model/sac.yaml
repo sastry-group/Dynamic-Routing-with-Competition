@@ -41,3 +41,5 @@ pretrained_path: null
 only_q_steps: 0 
 
 wandb: false # Enables Weights and Biases logging
+
+loop_number: 0  # Loop number for retraining in competitive scenario

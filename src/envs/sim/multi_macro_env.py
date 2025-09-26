@@ -812,7 +812,7 @@ class Scenario:
             # this part is
             for o,d in self.edges:
                 for t in range(0,tf*2):
-                    if t in self.demand_input[o,d]:
+                    if t in self.demand_input[o,d] and self.demand_input[o,d][t] > 10e-3:
                         self.p[o,d][t] /= self.demand_input[o,d][t]           
                         # print(f"Price, scenario generated input for edge ({o},{d}) at time {t}: {self.p[o,d][t]}")         
                         self.demandTime[o,d][t] /= self.demand_input[o,d][t]

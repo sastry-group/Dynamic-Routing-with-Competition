@@ -115,6 +115,7 @@ class CompetitionSim:
                 self.edges.append(e)
         self.edges = list(set(self.edges))
         self.historical_demand = {} # store historical demand for use in training loop
+        self.historical_prices = {} # store historical prices for use in training loop
 
     def _market_publish(self):
         # shared total demand & price at time t
@@ -177,6 +178,10 @@ class CompetitionSim:
         if self.time in self.historical_demand.keys():
             raise ValueError("Demand for time t already exists in historical_demand")
         self.historical_demand[self.time] = demand
+        self.historical_prices = {}
+        if self.time in self.historical_prices.keys():
+            raise ValueError("Prices for time t already exists in historical_prices")
+        self.historical_prices[self.time] = prices
         # self.compute_price_per_t()
         
         self.time = 0
@@ -236,6 +241,9 @@ class CompetitionSim:
         if self.time in self.historical_demand.keys():
             raise ValueError("Demand for time t already exists in historical_demand")
         self.historical_demand[self.time] = demand
+        if self.time in self.historical_prices.keys():
+            raise ValueError("Prices for time t already exists in historical_prices")
+        self.historical_prices[self.time] = prices
 
         # 4) each fleet solves its own pax LP with its cap + shared price
         #    Implemented as Fleet.match_with_caps(caps, P) returning {(i,j):flow}
@@ -279,21 +287,6 @@ class CompetitionSim:
                 numer = math.exp(-self.beta * prices[k][i,j])
                 demand_per_firm[k][(i, j)] = D * (numer / denom)
 
-        # What is this?
-        # origins = {i for (i, _) in demand_global_t.keys()}
-        # weights = {i: [] for i in origins}
-        # for i in origins:
-        #     accs = []
-        #     for f in self.fleets:
-        #         acc_i = f.acc[i].get(self.t+1, f.acc[i].get(self.t, 0.0))
-        #         accs.append(max(0.0, acc_i))
-        #     S = sum(accs) + self.eps
-        #     weights[i] = [a / S for a in accs]
-
-        # for (i, j), D in demand_global_t.items():
-        #     for k in range(K):
-        #         demand_per_firm[k][(i, j)] = D * weights[i][k]
-
         return demand_per_firm
     
     def compute_price_per_t(self, demand_global_t):
@@ -309,23 +302,23 @@ class CompetitionSim:
             f.price = price_t
         return fleet_prices
 
-    def compute_price(self, i, j, t, alpha, base_price):
-        # print(pricing_model)
-        # model: "cournot", "bertrand", "exogenous"
-        if self.pricing_model == "cournot":
-            # Prices are being treated as equal per i across all destinations j
-            try:
-                q_total = sum(self.fleets[f].acc[i][t] for f in range(self.firm_count))
-            except KeyError:
-                q_total = sum(self.fleets[f].acc[i] for f in range(self.firm_count))
-            if q_total <= 0:
-                return base_price 
+    # def compute_price(self, i, j, t, alpha, base_price):
+    #     # print(pricing_model)
+    #     # model: "cournot", "bertrand", "exogenous"
+    #     if self.pricing_model == "cournot":
+    #         # Prices are being treated as equal per i across all destinations j
+    #         try:
+    #             q_total = sum(self.fleets[f].acc[i][t] for f in range(self.firm_count))
+    #         except KeyError:
+    #             q_total = sum(self.fleets[f].acc[i] for f in range(self.firm_count))
+    #         if q_total <= 0:
+    #             return base_price 
 
-            a = 2 * base_price  # Should this really be 2x?
-            b = alpha * a * (1 / q_total)
-            cournot_price = a - b * q_total
-            # print(supply, q_total, p) # or current planned quantity
-            # print(f"Cournot price for edge ({i},{j}) at time {t}: {cournot_price}, and p,q: {p}, {q_total}")
-            return cournot_price
-        else:
-            return base_price
+    #         a = 2 * base_price  # Should this really be 2x?
+    #         b = alpha * a * (1 / q_total)
+    #         cournot_price = a - b * q_total
+    #         # print(supply, q_total, p) # or current planned quantity
+    #         # print(f"Cournot price for edge ({i},{j}) at time {t}: {cournot_price}, and p,q: {p}, {q_total}")
+    #         return cournot_price
+    #     else:
+    #         return base_price
