@@ -480,6 +480,12 @@ class Scenario:
             if prune:
                 for n in self.G.nodes:
                     self.G.nodes[n]['accInit'] = 10
+            elif 'initialAcc' in data:
+                for item in data["initialAcc"]:
+                    n, acc = item["region"], item["acc"]
+                    if json_regions != None and n not in json_regions:
+                        continue
+                    self.G.nodes[n]['accInit'] = int(acc)
             else: 
                 for item in data["totalAcc"]:
                     hr, acc = item["hour"], item["acc"]
