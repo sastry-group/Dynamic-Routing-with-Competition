@@ -275,7 +275,7 @@ class CompetitionSim:
         K = len(self.fleets)
         time = self.time
         rng = np.random.default_rng() 
-        global_demand_input = self.scenario.demand_input
+        # global_demand_input = self.scenario.demand_input
         demand_per_firm = [defaultdict(float) for _ in range(K)]
         if self.rule == "equal":
             for e, D in demand_global_t.items():
@@ -290,8 +290,8 @@ class CompetitionSim:
         #     for k in range(K):
         #         numer = math.exp(-self.beta * prices[k][i,j])
         #         demand_per_firm[k][(i, j)] = D * (numer / denom)
-        for (i, j), data in global_demand_input.items():
-            D = data.get(time, 0.0)
+        for (i, j), D in demand_global_t.items():
+            # D = data.get(time, 0.0)
             weights = [math.exp(-self.beta * prices[k][i, j]) for k in range(K)]
             denom = sum(weights)
             probs = [w / denom for w in weights]
@@ -306,7 +306,6 @@ class CompetitionSim:
             # for k in range(K):
             #     numer = math.exp(-self.beta * prices[k][i,j])
             #     demand_per_firm[k][(i, j)] = D * (numer / denom)
-
 
 
         return demand_per_firm
