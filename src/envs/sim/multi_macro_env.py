@@ -550,11 +550,12 @@ class Scenario:
                         # print(f"Price, scenario generated input for edge ({o},{d}) at time {t}: {self.p[o,d][t]}")         
                         self.demandTime[o,d][t] /= self.demand_input[o,d][t]
                         self.demandTime[o,d][t] = max(int(round(self.demandTime[o,d][t])),1)
+                        
                     else:
                         self.demand_input[o,d][t] = 0
                         self.p[o,d][t] = 0
                         self.demandTime[o,d][t] = 0
-            
+                
             for item in data["rebTime"]:
                 hr,o,d,rt = item["time_stamp"], item["origin"], item["destination"], item["reb_time"]
                 if json_regions!= None and (o not in json_regions or d not in json_regions):

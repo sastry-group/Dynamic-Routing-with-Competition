@@ -10,6 +10,7 @@ import os
 import copy
 import seaborn as sns
 import matplotlib.pyplot as plt
+import matplotlib as mpl
 import time
 from collections import defaultdict
 
@@ -255,47 +256,96 @@ def get_no_control_performance(cfg, env, parser, device, use_saved_data=False):
     
 
 def plot_comparison(cfg, env, control_data, comparison_data):
+
+    mpl.rcParams.update({
+        "font.size": 15,            # base
+        "axes.titlesize": 15,
+        "axes.labelsize": 15,
+        "legend.fontsize": 14,
+        "xtick.labelsize": 15,
+        "ytick.labelsize": 15,
+        "axes.linewidth": 1.0,
+        "pdf.fonttype": 42,        
+        "ps.fonttype": 42,
+    })
+
+    # Colorblind-safe Okabe–Ito palette 
+    # okabe_ito = ["#0072B2", "#E69F00", "#009E73", "#D55E00",
+    #              "#CC79A7", "#56B4E9", "#000000", "#F0E442"]
+    
+
+    # Distinct hatch patterns so bars remain distinguishable in grayscale
+    hatches = ["////", "xxxx", "----", "\\\\\\\\","++++", "....", "oooo", "****"]
+
     # Function to add value labels on top of bars
-    def add_value_labels(rects):
+    def add_value_labels( rects, fs=14):
         for rect in rects:
             height = rect.get_height()
             ax1.annotate(f'{height:.1f}',
-                        xy=(rect.get_x() + rect.get_width() / 2, height),
+                        xy=(rect.get_x() + rect.get_width()/ 2, height),
                         xytext=(0, 3),  # 3 points vertical offset
                         textcoords="offset points",
-                        ha='center', va='bottom')
+                        ha='center', va='bottom',fontsize=fs)
 
     profit_data, inflows = comparison_data
     labels = ['Overall Profit', 'Served Demand Profit', 'Rebalancing Cost']
     x = np.arange(len(labels))  # the label locations
-    width = 0.15  # the width of the bars
+    width = 0.18  # the width of the bars
     num_bars = len(profit_data) + 1
 
-    fig, (ax1, ax2) = plt.subplots(nrows=1, ncols=2, figsize=(15, 5))
+    fig, (ax1, ax2) = plt.subplots(nrows=1, ncols=2, figsize=(20, 8))
     
     #fig, ax = plt.subplots(figsize=(8, 5))
 
-    colors = sns.color_palette("hsv", len(profit_data) + 1)
-    start_x = x - (num_bars-1)*width/2 
+    # colors = okabe_ito[:(len(profit_data) + 1)]
+    colors = plt.get_cmap("Set2").colors
+
+    # make the first subplot square for IEEE look
+    try:
+        ax1.set_box_aspect(1)
+    except Exception:
+        pass
+
+    start_x = x - (num_bars - 1) * width / 2
     for ind, (key, data) in enumerate(profit_data.items()):
-        rects1 = ax1.bar(start_x + ind*width, data, width, label=key, color=colors[ind])
-        add_value_labels(rects1) # Adding value labels to each bar
-    rects2 = ax1.bar(start_x + (ind+1)*width, control_data, width, label='No Control', color=colors[-1])
+        if key == "equal_distribution":
+            key = "Equal Distribution"
+        elif key == "sac":
+            key = "SAC"
+        elif key == "random":
+            key = "Random"
+        rects1 = ax1.bar(
+            start_x + ind * width, data, width,
+            label=key,
+            color=colors[ind % len(colors)],
+            edgecolor="black", linewidth=0.9,
+            hatch=hatches[ind % len(hatches)]
+        )
+        add_value_labels(rects1)  # Adding value labels to each bar
+
+    rects2 = ax1.bar(
+        start_x + (ind + 1) * width, control_data, width,
+        label='No Control',
+        color=colors[-1],
+        edgecolor="black", linewidth=0.9,
+        hatch=hatches[(ind + 1) % len(hatches)]
+    )
     add_value_labels(rects2)
 
     # Add some text for labels, title and custom x-axis tick labels, etc.
     ax1.set_xlabel('Metrics')
-    ax1.set_ylabel('$, x10^3')
+    ax1.set_ylabel(r'USD ($\times 10^3$)')
     if cfg.simulator.firm_count == 1:
-        ax1.set_title(f'Comparison on {cfg.simulator.city} Environment with 1 Firm')
+        # ax1.set_title(f'Comparison on {cfg.simulator.city} Environment with 1 Firm')
+        ax1.set_title(f'Comparison on NYC - Brooklyn Environment with 1 Firm')
     else:
-        ax1.set_title(f'Comparison on {cfg.simulator.city} Environment with {cfg.simulator.firm_count} Firms')
+        # ax1.set_title(f'Comparison on {cfg.simulator.city} Environment with {cfg.simulator.firm_count} Firms')
+        ax1.set_title(f'Comparison on NYC - Brooklyn Environment with {cfg.simulator.firm_count} Firms')
     ax1.set_xticks(x)
     ax1.set_xticklabels(labels)
-    ax1.legend()
+    ax1.legend(loc='best', frameon=True, edgecolor='black')
 
-    #plt.tight_layout()
-    plt.grid(True, axis='y', linestyle='--', alpha=0.7)
+    ax1.grid(True, axis='y', linestyle='--', linewidth=0.7, alpha=0.8)
 
     if cfg.simulator.city != 'nyc_brooklyn': 
         plt.show()

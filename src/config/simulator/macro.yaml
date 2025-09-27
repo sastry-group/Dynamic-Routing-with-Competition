@@ -28,8 +28,8 @@ agents_know_partial_demand: false
 
 constant_vehicle_count: true
 
-demand_filter_type: "portion" 
+demand_filter_type: "flow" 
 
-initial_vehicle_distribution: "random"  # Options: "random", None for equal
+initial_vehicle_distribution: None  # Options: "random", None for equal
 
-pricing_model: "exogenous"  # Options: "cournot", "bertrand", "exogenous"
+pricing_model: None  # Options: "cournot", "bertrand", "exogenous"
