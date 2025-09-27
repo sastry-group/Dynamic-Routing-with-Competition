@@ -3,6 +3,7 @@ from collections import defaultdict
 from copy import deepcopy
 from src.misc.utils import dictsum
 import math
+import numpy as np
 
 
 # class Allocator:
@@ -105,7 +106,7 @@ class CompetitionSim:
             self.price[i,j][t] = p
             # self.depDemand[i][t] += d
             # self.arrDemand[i][t+self.demandTime[i,j][t]] += d
-        print(f"Initial demand: {self.demand}")
+        # print(f"Initial demand: {self.demand}")
         self.G = scenario.G
         self.edges = []
         self.beta = 0.3 # sensitivity parameter for price computation
@@ -272,6 +273,9 @@ class CompetitionSim:
 
     def compute_demand_per_t(self, demand_global_t, prices):
         K = len(self.fleets)
+        time = self.time
+        rng = np.random.default_rng() 
+        global_demand_input = self.scenario.demand_input
         demand_per_firm = [defaultdict(float) for _ in range(K)]
         if self.rule == "equal":
             for e, D in demand_global_t.items():
@@ -281,11 +285,29 @@ class CompetitionSim:
             return demand_per_firm
 
         # as a function of price 
-        for (i, j), D in demand_global_t.items():
-            denom = sum([math.exp(-self.beta * prices[k][i,j]) for k in range(K)]) + self.eps
+        # for (i, j), D in demand_global_t.items():
+        #     denom = sum([math.exp(-self.beta * prices[k][i,j]) for k in range(K)]) + self.eps
+        #     for k in range(K):
+        #         numer = math.exp(-self.beta * prices[k][i,j])
+        #         demand_per_firm[k][(i, j)] = D * (numer / denom)
+        for (i, j), data in global_demand_input.items():
+            D = data.get(time, 0.0)
+            weights = [math.exp(-self.beta * prices[k][i, j]) for k in range(K)]
+            denom = sum(weights)
+            probs = [w / denom for w in weights]
+            if D <= 0:
+                continue
+        
+            counts = rng.multinomial(int(D), probs)
             for k in range(K):
-                numer = math.exp(-self.beta * prices[k][i,j])
-                demand_per_firm[k][(i, j)] = D * (numer / denom)
+                demand_per_firm[k][(i, j)] = counts[k]
+
+            # denom = sum([math.exp(-self.beta * prices[k][i,j]) for k in range(K)]) + self.eps
+            # for k in range(K):
+            #     numer = math.exp(-self.beta * prices[k][i,j])
+            #     demand_per_firm[k][(i, j)] = D * (numer / denom)
+
+
 
         return demand_per_firm
     

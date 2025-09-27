@@ -35,7 +35,7 @@ config = {
     # "simulator.demand": "historical_demand_firm_0_0",
     "model.cplexpath": None,
     "model.test_episodes": 1,
-    "model.checkpoint_path": "SAC_portion_4",
+    "model.checkpoint_path": "SAC_flow_4",
     "model.loop_number": 0,
     "simulator.reuse_no_control": False,
     "simulator.firm_count": 4,

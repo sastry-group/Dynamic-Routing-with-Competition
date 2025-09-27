@@ -65,7 +65,9 @@ def solveRebFlow_pulp(env, desiredAcc):
 
     # Map vehicle availability and desired vehicles for each region
     acc_init = {n: int(env.acc[n][t+1]) for n in env.acc}
+    # print(f"Current veh. distro at time {t} for firm {env.firm_id}, totalsum is {sum(acc_init.values())}: ", acc_init)
     desired_vehicles = {n: int(round(desiredAcc[n])) for n in desiredAcc}
+    # print(f"Desired veh. distro at time {t} for firm {env.firm_id}, totalsum is {sum(desired_vehicles.values())}: ", desired_vehicles)
 
     region = [n for n in acc_init]
     # Time on each edge (used in the objective)
@@ -108,6 +110,7 @@ def solveRebFlow_pulp(env, desiredAcc):
         #flow_result = {(i, j): value(rebFlow[(i, j)]) for (i, j) in edges}
         
         action = [flow[i,j] for i,j in env.edges]
+        # print("Rebalancing Flow Actions sum {}:".format(sum(action)))
         return action
     else:
         print(f"Rebalancing optimization failed with status: {LpStatus[status]}")

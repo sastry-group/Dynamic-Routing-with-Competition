@@ -188,8 +188,10 @@ def multi_test(input_config):
         use_cuda = not cfg.model.no_cuda and torch.cuda.is_available()
         device = torch.device("cuda" if use_cuda else "cpu")
 
-        (profit, inflows), file_names = test_approach(cfg, env, parser, device, loop_number=config["model.loop_number"], name=f"_{config["model.name"]}")
+        (profit, inflows), file_names = test_approach(cfg, env, parser, device, loop_number=config["model.loop_number"], name=f"_{config['model.name']}")
         data[0][config["model.name"]], data[1][config['model.name']], data[2][config['model.name']] = profit, inflows, file_names
+        # profit, inflows= test_approach(cfg, env, parser, device)
+        # data[0][config["model.name"]], data[1][config['model.name']] = profit, inflows
 
     # no_ctrl_cfg = ...
     # no_ctrl_env = ...
@@ -336,6 +338,7 @@ def test_approach(cfg, env, parser, device, loop_number=0, name=""):
                 if cfg.model.name == "sac":
                     a = models[k].select_action(obs_list[k], deterministic=True)
                     desiredAcc = {f.region[i]: int(a[i] * dictsum(f.acc, f.time + 1)) for i in range(len(f.region))}
+                    # print(f"Firm {k} desiredAcc (sum {sum(desiredAcc.values())}): ", desiredAcc)
                     reb = solveRebFlow(f, [], desiredAcc, "None")
                     reb_actions.append(reb)
                 elif cfg.model.name == "equal_distribution" or cfg.model.name == "random" or cfg.model.name == "no_rebalancing":
