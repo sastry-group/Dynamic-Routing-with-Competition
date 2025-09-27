@@ -110,6 +110,6 @@ def solveRebFlow_pulp(env, desiredAcc):
         action = [flow[i,j] for i,j in env.edges]
         return action
     else:
-        print(f"Optimization failed with status: {LpStatus[status]}")
+        print(f"Rebalancing optimization failed with status: {LpStatus[status]}")
         return None
 

@@ -36,9 +36,14 @@ def setup_macro(cfg):
 
     cfg = cfg.simulator
     city = cfg.city
+    demand_file = cfg.demand
+    if demand_file == city:
+        json_file = f"src/envs/data/multi_macro/scenario_{city}.json"
+    else:
+        json_file = f"saved_files/{demand_file}.json"
      
     scenario = Scenario(
-    json_file=f"src/envs/data/macro/scenario_{city}.json",
+    json_file=json_file,
     demand_ratio=calibrated_params[city]["demand_ratio"],
     json_hr=calibrated_params[city]["json_hr"],
     sd=cfg.seed,

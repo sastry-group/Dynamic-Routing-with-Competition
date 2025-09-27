@@ -160,7 +160,7 @@ class AMoD:
 
             return paxAction
         else:
-            print(f"Optimization failed with status: {LpStatus[status]}")
+            print(f"Passenger optimization failed with status: {LpStatus[status]}")
             return None
     
     # pax step
@@ -454,7 +454,7 @@ class Scenario:
             
             for o,d in self.edges:
                 for t in range(0,tf*2):
-                    if t in self.demand_input[o,d]:
+                    if t in self.demand_input[o,d] and self.demand_input[o,d][t]>1e-3:
                         self.p[o,d][t] /= self.demand_input[o,d][t]                    
                         self.demandTime[o,d][t] /= self.demand_input[o,d][t]
                         self.demandTime[o,d][t] = max(int(round(self.demandTime[o,d][t])),1)

@@ -202,7 +202,7 @@ class AMoD:
 
             return paxAction
         else:
-            print(f"Optimization failed with status: {LpStatus[status]}")
+            print(f"Passenger optimization failed with status: {LpStatus[status]}")
             return None
     
     # pax step
@@ -529,7 +529,7 @@ class Fleet:
             paxAction = [flow[i,j] if (i,j) in flow else 0 for i,j in self.edges]
             return paxAction
         else:
-            print(f"Optimization failed with status: {LpStatus[status]}")
+            print(f"Passenger optimization failed with status: {LpStatus[status]}")
             return None
         
     def compute_price(self, i, j, t, price, pricing_model):
@@ -812,7 +812,7 @@ class Scenario:
             # this part is
             for o,d in self.edges:
                 for t in range(0,tf*2):
-                    if t in self.demand_input[o,d] and self.demand_input[o,d][t] > 10e-3:
+                    if t in self.demand_input[o,d] and self.demand_input[o,d][t] > 1e-3:
                         self.p[o,d][t] /= self.demand_input[o,d][t]           
                         # print(f"Price, scenario generated input for edge ({o},{d}) at time {t}: {self.p[o,d][t]}")         
                         self.demandTime[o,d][t] /= self.demand_input[o,d][t]

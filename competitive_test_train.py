@@ -18,8 +18,8 @@ def in_loop_retraining(firm_count=4, episodes_before_retrain=7, max_retrain=10):
         # Test the model for episodes_before_retrain episodes
         config = {
             "simulator.name": "multi_macro",
-            "model.name": ["sac", "equal_distribution", "random"],
-            # "model.name": ["sac"],
+            # "model.name": ["sac", "equal_distribution", "random"],
+            "model.name": ["sac"],
             "simulator.city": "nyc_brooklyn",
             # "simulator.demand": "historical_demand_firm_0_0",
             "model.cplexpath": None,
@@ -43,7 +43,7 @@ def in_loop_retraining(firm_count=4, episodes_before_retrain=7, max_retrain=10):
         for k in range(K):
             # Train a model based on new historical demand
             config = {
-                "simulator.name": "multi_macro",
+                "simulator.name": "macro",
                 "model.name": "sac",
                 "simulator.city": "nyc_brooklyn",
                 "simulator.demand": f"historical_demand_sac_firm_{k}_{retrain_count}",

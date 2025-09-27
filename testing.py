@@ -377,14 +377,14 @@ def test_approach(cfg, env, parser, device, loop_number=0, name=""):
         for (i,j), t_dict in historical_demand[k].items():
             for t, d in t_dict.items():
                 historical_demand[k][(i,j)][t] = d / test_episodes / env.cfg.demand_ratio
-    print("Average historical demand per episode:", historical_demand)
+    # print("Average historical demand per episode:", historical_demand)
     # Average the historical prices over episodes
     historical_prices = deepcopy(historical_price_totals)
     for k, f in enumerate(fleets):
         for (i,j), t_dict in historical_prices[k].items():
             for t, p in t_dict.items():
                 historical_prices[k][(i,j)][t] = p / test_episodes
-    print("Average historical prices per episode:", historical_prices)
+    # print("Average historical prices per episode:", historical_prices)
 
     json_file = f"src/envs/data/multi_macro/scenario_{cfg.simulator.city}.json"
     with open(json_file, 'r') as file:
