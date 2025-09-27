@@ -289,8 +289,9 @@ def test_approach(cfg, env, parser, device, loop_number=0, name=""):
     models = []
     for k in range(K):
         # Clone cfg but override model name/checkpoint for this firm
-        # firm_cfg = deepcopy(cfg)
-        m = setup_model(cfg, env, parser, device) # this could be env per fleet, unsure
+        firm_cfg = deepcopy(cfg)
+        firm_cfg.model.checkpoint_path = cfg.model.checkpoint_path if isinstance(cfg.model.checkpoint_path, str) else cfg.model.checkpoint_path[k]
+        m = setup_model(firm_cfg, env, parser, device) # this could be env per fleet, unsure
         models.append(m)
 
     # 3) CompetitionSim setups the demand allocation
@@ -445,7 +446,11 @@ def convert(data, sim, json_start=0, json_tstep=1, extra_data=None):
                 })
         firm_result = {"nlat": sim.scenario.N1, "nlon": sim.scenario.N2, "demand": firm_result}
         if extra_data is not None:
-            firm_result.update(extra_data)
+            extra_firm_data = deepcopy(extra_data)
+            if "totalAcc" in extra_firm_data:
+                for elem in extra_firm_data["totalAcc"]:
+                    elem["acc"] = sim.scenario.total_vehicles
+            firm_result.update(extra_firm_data)
         result.append(firm_result)
         
         # result.append({"demand": firm_result, "nlon": data["nlon"], "nlat": data["nlat"]})

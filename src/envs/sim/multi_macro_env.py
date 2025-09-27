@@ -743,7 +743,7 @@ class Scenario:
                 self.tripAttr = deepcopy(tripAttr)
             else:
                 self.tripAttr = self.get_random_demand() # randomly generated demand
-            
+            self.total_vehicles = self.ninit * self.N1 * self.N2
         
         else:
             self.varying_time = varying_time
@@ -860,6 +860,7 @@ class Scenario:
                     if hr == json_hr+int(round(json_tstep/2*tf/60)):
                         for n in self.G.nodes:
                             self.G.nodes[n]['accInit'] = int(acc/len(self.G)) // supply_factor
+                        self.total_vehicles = int(acc) // supply_factor
             self.tripAttr = self.get_random_demand()
                 
         
