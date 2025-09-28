@@ -4,6 +4,7 @@ import importlib
 import warnings
 warnings.filterwarnings("ignore")
 importlib.reload(testing)
+import random
 
 import sys
 if 'testing' in sys.modules:
@@ -14,6 +15,8 @@ def in_loop_retraining(firm_count=4, episodes_before_retrain=7, max_retrain=10):
     retrain_count = 0
     K = firm_count
     firm_policies = [f"SAC_portion_{firm_count}" for _ in range(K)]  # Initial policies for each firm
+    alphas = [random.uniform(sys.float_info.epsilon, 1 - sys.float_info.epsilon) for _ in range(K)]
+    output_data = []
     while True:
         # Test the model for episodes_before_retrain episodes
         config = {
@@ -22,8 +25,9 @@ def in_loop_retraining(firm_count=4, episodes_before_retrain=7, max_retrain=10):
             "model.name": ["sac"],
             "simulator.city": "nyc_brooklyn",
             "model.cplexpath": None,
-            "model.test_episodes": 1,
+            "model.test_episodes": 100,
             "model.checkpoint_path": firm_policies,
+            "model.alpha": alphas,
             "simulator.reuse_no_control": False,
             "simulator.firm_count": firm_count,
             "simulator.agents_know_partial_demand": True,
@@ -48,7 +52,7 @@ def in_loop_retraining(firm_count=4, episodes_before_retrain=7, max_retrain=10):
                 "simulator.demand": f"historical_demand_sac_firm_{k}_{retrain_count}",
                 "model.cplexpath": None,
                 "model.checkpoint_path": firm_policies[k],  # Save new model to new file
-                "model.max_episodes": 50,
+                "model.max_episodes": 100, # Was 50
                 "simulator.reuse_no_control": False,
                 "simulator.firm_count": 1,
                 "simulator.agents_know_partial_demand": True,
@@ -56,12 +60,40 @@ def in_loop_retraining(firm_count=4, episodes_before_retrain=7, max_retrain=10):
                 "simulator.demand_filter_type": "flow" 
             }
             train(config)
+        output_data.append(data)
         retrain_count += 1
 
+    # Dump data
+    import pickle
+    with open(f'saved_files/competition_loop_data_{firm_count}_firms_{max_retrain}_retrain.pkl', 'wb') as f:
+        pickle.dump(output_data, f)
 
     # Plot results
     # Subplot per firm with Overall profit vs week line plot using sac, if this firm does not retrain, equal_dist, random, and no control
+    # import pickle
+    import numpy as np
+    import matplotlib.pyplot as plt
+    # data = pickle.load(open('saved_files/competition_loop_data_4_firms_100_retrain.pkl', 'rb'))
+    # print(data)
+    x = [[elem[0]["sac"][k][0] for elem in output_data] for k in range(4)]
+    for k in range(4):
+        plt.plot(np.arange(len(x[k])), x[k], label=f'Firm {k} SAC')
+    plt.xlabel('Retrain Iteration')
+    plt.ylabel('Overall Profit')
+    plt.title('Overall Profit vs Retrain Iteration for Each Firm')
 
 
 if __name__ == "__main__":
     in_loop_retraining(firm_count=4, episodes_before_retrain=7, max_retrain=10)
+
+    # import pickle
+    # import numpy as np
+    # import matplotlib.pyplot as plt
+    # data = pickle.load(open('saved_files/competition_loop_data_4_firms_10_retrain.pkl', 'rb'))
+    # print(data)
+    # x = [[elem[0]["sac"][k][0] for elem in data] for k in range(4)]
+    # for k in range(4):
+    #     plt.plot(np.arange(len(x[k])), x[k], label=f'Firm {k} SAC')
+    # plt.xlabel('Retrain Iteration')
+    # plt.ylabel('Overall Profit')
+    # plt.title('Overall Profit vs Retrain Iteration for Each Firm')

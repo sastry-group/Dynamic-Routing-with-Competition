@@ -460,7 +460,7 @@ class Fleet:
                 self.dacc[n] = defaultdict(float)
 
         # Pricing parameters
-        self.alpha = random.uniform(sys.float_info.epsilon, 1 - sys.float_info.epsilon)
+        self.alpha = cfg.model.alpha
         self.max_supply = sum([self.acc[n][0] for n in self.regions])
         print("Fleet max supply:", self.max_supply)
 

@@ -280,17 +280,21 @@ def test_approach(cfg, env, parser, device, loop_number=0, name=""):
     # 1) One Fleet env per firm from the SAME scenario
     with open("src/envs/data/macro/calibrated_parameters.json", "r") as file:
         calibrated_params = json.load(file)
-    fleets = [Fleet(env, cfg, firm_id=f"firm_{k}") for k in range(K)]
+
+    firms_cfgs = deepcopy([cfg for _ in range(K)])
+    for k, firm_cfg in enumerate(firms_cfgs):
+        # Clone cfg but override model name and alpha for each firm
+        firm_cfg.model.alpha = cfg.model.alpha[k]
+        firm_cfg.model.checkpoint_path = cfg.model.checkpoint_path if isinstance(cfg.model.checkpoint_path, str) else cfg.model.checkpoint_path[k]
+    
+    fleets = [Fleet(env, firm_cfg, firm_id=f"firm_{k}") for k, firm_cfg in enumerate(firms_cfgs)]
     for f in fleets:
         if not hasattr(f, "region") and hasattr(f, "regions"):
             f.region = f.regions
 
     # 2) One model per firm, each attached to its own Fleet
     models = []
-    for k in range(K):
-        # Clone cfg but override model name/checkpoint for this firm
-        firm_cfg = deepcopy(cfg)
-        firm_cfg.model.checkpoint_path = cfg.model.checkpoint_path if isinstance(cfg.model.checkpoint_path, str) else cfg.model.checkpoint_path[k]
+    for firm_cfg in firms_cfgs:
         m = setup_model(firm_cfg, env, parser, device) # this could be env per fleet, unsure
         models.append(m)
 
