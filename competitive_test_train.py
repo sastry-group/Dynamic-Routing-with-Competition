@@ -44,6 +44,9 @@ def in_loop_retraining(experiment = "first_firm_constant", firm_count=4, episode
         data = testing.multi_test(config)
         # test_results, data_files = testing.test_approach(cfg, env, parser, device, loop_number=retrain_count, name="sac")
 
+        output_data.append(data)
+        print(f"Profits after retrain {retrain_count}: ", [data[0]["sac"][k][0] for k in range(K)])
+
         if retrain_count >= max_retrain:
             break
         # Retrain model for each agent
@@ -60,7 +63,7 @@ def in_loop_retraining(experiment = "first_firm_constant", firm_count=4, episode
                 "simulator.demand": f"historical_demand_sac_firm_{k}_{retrain_count}",
                 "model.cplexpath": None,
                 "model.checkpoint_path": firm_policies[k],  # Save new model to new file
-                "model.max_episodes": 50, # Was 50
+                "model.max_episodes": 5, # Was 50
                 "simulator.reuse_no_control": False,
                 "simulator.firm_count": 1,
                 "simulator.agents_know_partial_demand": True,
@@ -68,8 +71,8 @@ def in_loop_retraining(experiment = "first_firm_constant", firm_count=4, episode
                 "simulator.demand_filter_type": "flow" 
             }
             train(config)
-        output_data.append(data)
-        print(f"Profits after retrain {retrain_count}: ", [data[0]["sac"][k][0] for k in range(K)])
+        # output_data.append(data)
+        # print(f"Profits after retrain {retrain_count}: ", [data[0]["sac"][k][0] for k in range(K)])
         retrain_count += 1
 
     # Dump data

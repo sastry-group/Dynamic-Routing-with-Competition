@@ -400,7 +400,7 @@ def test_approach(cfg, env, parser, device, loop_number=0, name=""):
     extra_save_data = {"nlat": data["nlat"], "nlon": data["nlon"], "totalAcc": data["totalAcc"], "rebTime": data["rebTime"], "topology_graph": data["topology_graph"]}
 
     # Write historical demand and prices data to files
-    formatted_data = convert({"demand":historical_demand, "prices": historical_prices}, sim, json_start=env.scenario.json_start, json_tstep=cfg.simulator.json_tsetp, extra_data=extra_save_data)
+    formatted_data = convert({"demand":historical_demand, "prices": historical_prices}, sim, json_start=env.scenario.json_start, json_tstep=cfg.simulator.json_tsetp, extra_data=extra_save_data, demand_ratio=env.cfg.demand_ratio)
     file_names = []
     for k in range(K):
         file_name = f'saved_files/historical_demand{name}_firm_{k}_{loop_number}.json'
@@ -422,14 +422,14 @@ def test_approach(cfg, env, parser, device, loop_number=0, name=""):
     return (rl_means_per_fleet, inflows_per_fleet), file_names
 
 
-def convert(data, sim, json_start=0, json_tstep=1, extra_data=None):
+def convert(data, sim, json_start=0, json_tstep=1, extra_data=None, demand_ratio=1):
     result = []
     for demand, prices, f in zip(data["demand"], data["prices"], sim.fleets):
         firm_result = []
         for (i,j) in f.edges:
         # for origin, destination in demand.keys():
-            default_demand = sim.demand[i,j]
-            default_prices = sim.price[i,j]
+            default_demand = deepcopy(sim.demand[i,j])
+            default_prices = deepcopy(sim.price[i,j])
             if (i,j) not in demand:
                 inner_demand = default_demand
                 inner_prices = default_prices
@@ -438,7 +438,7 @@ def convert(data, sim, json_start=0, json_tstep=1, extra_data=None):
                 inner_prices = prices[(i, j)]
             for time_stamp in default_demand.keys():
                 if time_stamp not in inner_demand:
-                    inner_demand[time_stamp] = default_demand[time_stamp]
+                    inner_demand[time_stamp] = default_demand[time_stamp] / len(sim.fleets) / demand_ratio
                     inner_prices[time_stamp] = default_prices[time_stamp]
                 firm_result.append({
                     "time_stamp": time_stamp*json_tstep + json_start,
