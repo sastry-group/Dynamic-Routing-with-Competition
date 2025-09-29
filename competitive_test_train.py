@@ -18,6 +18,7 @@ def in_loop_retraining(experiment = "first_firm_constant", firm_count=4, episode
     firm_policies = [f"SAC_portion_{firm_count}" for _ in range(K)]  # Initial policies for each firm
     alphas = [random.uniform(sys.float_info.epsilon, 1 - sys.float_info.epsilon) for _ in range(K)]
     output_data = []
+    
     while True:
         if experiment == "first_firm_constant":
             firm_policies[0] = f"SAC_portion_{firm_count}"
@@ -63,7 +64,8 @@ def in_loop_retraining(experiment = "first_firm_constant", firm_count=4, episode
                 "simulator.demand": f"historical_demand_sac_firm_{k}_{retrain_count}",
                 "model.cplexpath": None,
                 "model.checkpoint_path": firm_policies[k],  # Save new model to new file
-                "model.max_episodes": 5, # Was 50
+                "model.max_episodes": 100, # Was 50
+                "model.wandb": True,
                 "simulator.reuse_no_control": False,
                 "simulator.firm_count": 1,
                 "simulator.agents_know_partial_demand": True,
@@ -71,8 +73,8 @@ def in_loop_retraining(experiment = "first_firm_constant", firm_count=4, episode
                 "simulator.demand_filter_type": "flow" 
             }
             train(config)
-        # output_data.append(data)
-        # print(f"Profits after retrain {retrain_count}: ", [data[0]["sac"][k][0] for k in range(K)])
+        output_data.append(data)
+        print(f"Profits after retrain {retrain_count}: ", [data[0]["sac"][k][0] for k in range(K)])
         retrain_count += 1
 
     # Dump data
@@ -82,19 +84,27 @@ def in_loop_retraining(experiment = "first_firm_constant", firm_count=4, episode
 
     # Format for filename
     filename_time = now.strftime("%Y%m%d_%H%M%S")
+    # alphas_file = f"saved_files/competition_loop_alphas_{firm_count}_firms_{max_retrain}_retrain_{filename_time}.pkl"
+    alphas_file = f"saved_files/competition_loop_alphas.pkl"
     with open(f'saved_files/competition_loop_data_{firm_count}_firms_{max_retrain}_retrain_{filename_time}.pkl', 'wb') as f:
         pickle.dump(output_data, f)
+    with open(alphas_file, "wb") as f:
+        pickle.dump(alphas, f)
 
     # Plot results
     # Subplot per firm with Overall profit vs week line plot using sac, if this firm does not retrain, equal_dist, random, and no control
     # import pickle
     import numpy as np
     import matplotlib.pyplot as plt
-    # data = pickle.load(open('saved_files/competition_loop_data_4_firms_100_retrain.pkl', 'rb'))
+    # data = pickle.load(open('saved_files/competition_loop_data_4_firms_10_retrain_20250929_133001.pkl', 'rb'))
     # print(data)
+    with open(alphas_file, "rb") as f:
+        alphas = pickle.load(f)
     x = [[elem[0]["sac"][k][0] for elem in output_data] for k in range(4)]
+    # x = [[elem[0]["sac"][k][0] for elem in data] for k in range(4)]
     for k in range(4):
-        plt.plot(np.arange(len(x[k])), x[k], label=f'Firm {k} SAC')
+        plt.plot(np.arange(len(x[k])), x[k], label=f'Firm {k} SAC, alpha={alphas[k]:.2f}')
+    plt.legend()
     plt.xlabel('Retrain Iteration')
     plt.ylabel('Overall Profit')
     plt.title('Overall Profit vs Retrain Iteration for Each Firm')
@@ -106,10 +116,15 @@ def replot(filename):
     import numpy as np
     import matplotlib.pyplot as plt
     data = pickle.load(open(filename, 'rb'))
+    alphas_file = f"saved_files/competition_loop_alphas.pkl"
+    alphas = pickle.load(open(alphas_file, "rb"))
+    with open(alphas_file, "wb") as f:
+        pickle.dump(alphas, f)
     print(data)
     x = [[elem[0]["sac"][k][0] for elem in data] for k in range(4)]
     for k in range(4):
-        plt.plot(np.arange(len(x[k])), x[k], label=f'Firm {k} SAC')
+        plt.plot(np.arange(len(x[k])), x[k], label=f'Firm {k} SAC, alpha={alphas[k]:.2f}')
+    plt.legend()
     plt.xlabel('Retrain Iteration')
     plt.ylabel('Overall Profit')
     plt.title('Overall Profit vs Retrain Iteration for Each Firm')

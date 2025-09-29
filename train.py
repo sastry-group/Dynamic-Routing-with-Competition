@@ -185,18 +185,28 @@ def train(config):
     device = torch.device("cuda" if use_cuda else "cpu")
     model = setup_model(cfg, env, parser, device)
     
-    model.wandb = None
+    # model.wandb = None
+    # if cfg.model.wandb: 
+    #     import wandb
+    #     config = {}
+    #     for key in cfg.model.keys():
+    #         config[key] = cfg.model[key]
+    #     wandb = wandb.init(
+    #         project="",
+    #         entity="",
+    #         config=config,
+    #     )
+    #     model.wandb = wandb
     if cfg.model.wandb: 
         import wandb
-        config = {}
-        for key in cfg.model.keys():
-            config[key] = cfg.model[key]
-        wandb = wandb.init(
-            project="",
-            entity="",
-            config=config,
+        wandb_config = {k: v for k, v in cfg.model.items()}
+        run = wandb.init(
+            project=cfg.model.get("project", "default-project"),
+            entity=cfg.model.get("entity", None),
+            name=cfg.model.get("run_name", None),
+            config=wandb_config,
         )
-        model.wandb = wandb
+        model.wandb = run
 
     model.learn(cfg)
 
@@ -230,18 +240,29 @@ def main(cfg: DictConfig):
     
     model = setup_model(cfg, env, parser, device)
     
-    model.wandb = None
+    # model.wandb = None
+    # if cfg.model.wandb: 
+    #     import wandb
+    #     config = {}
+    #     for key in cfg.model.keys():
+    #         config[key] = cfg.model[key]
+    #     wandb = wandb.init(
+    #         project="",
+    #         entity="",
+    #         config=config,
+    #     )
+    #     model.wandb = wandb
+
     if cfg.model.wandb: 
         import wandb
-        config = {}
-        for key in cfg.model.keys():
-            config[key] = cfg.model[key]
-        wandb = wandb.init(
-            project="",
-            entity="",
-            config=config,
+        wandb_config = {k: v for k, v in cfg.model.items()}
+        run = wandb.init(
+            project=cfg.model.get("project", "default-project"),
+            entity=cfg.model.get("entity", None),
+            name=cfg.model.get("run_name", None),
+            config=wandb_config,
         )
-        model.wandb = wandb
+        model.wandb = run
 
     if hasattr(cfg.model, "data_path"): 
         Dataset = setup_dataset(cfg, env, device)
