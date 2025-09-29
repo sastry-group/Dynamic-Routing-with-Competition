@@ -281,7 +281,7 @@ def test_approach(cfg, env, parser, device, loop_number=0, name=""):
     with open("src/envs/data/macro/calibrated_parameters.json", "r") as file:
         calibrated_params = json.load(file)
 
-    firms_cfgs = deepcopy([cfg for _ in range(K)])
+    firms_cfgs = [deepcopy(cfg) for _ in range(K)]
     for k, firm_cfg in enumerate(firms_cfgs):
         # Clone cfg but override model name and alpha for each firm
         firm_cfg.model.alpha = cfg.model.alpha[k]

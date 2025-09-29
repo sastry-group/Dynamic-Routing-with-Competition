@@ -20,7 +20,7 @@ def in_loop_retraining(experiment = "first_firm_constant", firm_count=4, episode
     output_data = []
     while True:
         if experiment == "first_firm_constant":
-            firm_policies[0] = [f"SAC_portion_{firm_count}"]
+            firm_policies[0] = f"SAC_portion_{firm_count}"
 
         # Test the model for episodes_before_retrain episodes
         config = {
@@ -29,7 +29,7 @@ def in_loop_retraining(experiment = "first_firm_constant", firm_count=4, episode
             "model.name": ["sac"],
             "simulator.city": "nyc_brooklyn",
             "model.cplexpath": None,
-            "model.test_episodes": 100,
+            "model.test_episodes": 7,
             "model.checkpoint_path": firm_policies,
             "model.alpha": alphas,
             "simulator.reuse_no_control": False,
@@ -49,6 +49,9 @@ def in_loop_retraining(experiment = "first_firm_constant", firm_count=4, episode
         # Retrain model for each agent
         firm_policies = [f"SAC_portion_4_firm_{k}_loop_{retrain_count+1}" for k in range(K)]
         for k in range(K):
+            if experiment == "first_firm_constant":
+                if k == 0:
+                    continue  # Don't retrain the first firm
             # Train a model based on new historical demand
             config = {
                 "simulator.name": "macro",
@@ -57,7 +60,7 @@ def in_loop_retraining(experiment = "first_firm_constant", firm_count=4, episode
                 "simulator.demand": f"historical_demand_sac_firm_{k}_{retrain_count}",
                 "model.cplexpath": None,
                 "model.checkpoint_path": firm_policies[k],  # Save new model to new file
-                "model.max_episodes": 100, # Was 50
+                "model.max_episodes": 50, # Was 50
                 "simulator.reuse_no_control": False,
                 "simulator.firm_count": 1,
                 "simulator.agents_know_partial_demand": True,

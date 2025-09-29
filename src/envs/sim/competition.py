@@ -109,7 +109,7 @@ class CompetitionSim:
         # print(f"Initial demand: {self.demand}")
         self.G = scenario.G
         self.edges = []
-        self.beta = 0.3 # sensitivity parameter for price computation
+        self.beta = 0.01 # sensitivity parameter for price computation
         for i in self.G:
             self.edges.append((i,i))
             for e in self.G.out_edges(i):
