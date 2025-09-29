@@ -11,13 +11,17 @@ if 'testing' in sys.modules:
     del sys.modules['testing']
 
 
-def in_loop_retraining(firm_count=4, episodes_before_retrain=7, max_retrain=10):
+def in_loop_retraining(experiment = "first_firm_constant", firm_count=4, episodes_before_retrain=7, max_retrain=100):
     retrain_count = 0
     K = firm_count
+
     firm_policies = [f"SAC_portion_{firm_count}" for _ in range(K)]  # Initial policies for each firm
     alphas = [random.uniform(sys.float_info.epsilon, 1 - sys.float_info.epsilon) for _ in range(K)]
     output_data = []
     while True:
+        if experiment == "first_firm_constant":
+            firm_policies[0] = [f"SAC_portion_{firm_count}"]
+
         # Test the model for episodes_before_retrain episodes
         config = {
             "simulator.name": "multi_macro",
@@ -34,6 +38,7 @@ def in_loop_retraining(firm_count=4, episodes_before_retrain=7, max_retrain=10):
             "simulator.constant_vehicle_count": True,
             "simulator.demand_filter_type": "equal" ,
             "simulator.pricing_model": "equal",
+            "simulator.initial_vehicle_distribution": "random",
             "model.loop_number": retrain_count
         }
         data = testing.multi_test(config)
@@ -61,11 +66,17 @@ def in_loop_retraining(firm_count=4, episodes_before_retrain=7, max_retrain=10):
             }
             train(config)
         output_data.append(data)
+        print(f"Profits after retrain {retrain_count}: ", [data[0]["sac"][k][0] for k in range(K)])
         retrain_count += 1
 
     # Dump data
     import pickle
-    with open(f'saved_files/competition_loop_data_{firm_count}_firms_{max_retrain}_retrain.pkl', 'wb') as f:
+    from datetime import datetime
+    now = datetime.now()
+
+    # Format for filename
+    filename_time = now.strftime("%Y%m%d_%H%M%S")
+    with open(f'saved_files/competition_loop_data_{firm_count}_firms_{max_retrain}_retrain_{filename_time}.pkl', 'wb') as f:
         pickle.dump(output_data, f)
 
     # Plot results
@@ -82,18 +93,23 @@ def in_loop_retraining(firm_count=4, episodes_before_retrain=7, max_retrain=10):
     plt.ylabel('Overall Profit')
     plt.title('Overall Profit vs Retrain Iteration for Each Firm')
 
+    plt.show()
+
+def replot(filename):
+    import pickle
+    import numpy as np
+    import matplotlib.pyplot as plt
+    data = pickle.load(open(filename, 'rb'))
+    print(data)
+    x = [[elem[0]["sac"][k][0] for elem in data] for k in range(4)]
+    for k in range(4):
+        plt.plot(np.arange(len(x[k])), x[k], label=f'Firm {k} SAC')
+    plt.xlabel('Retrain Iteration')
+    plt.ylabel('Overall Profit')
+    plt.title('Overall Profit vs Retrain Iteration for Each Firm')
+
+    plt.show()
+
 
 if __name__ == "__main__":
-    in_loop_retraining(firm_count=4, episodes_before_retrain=7, max_retrain=10)
-
-    # import pickle
-    # import numpy as np
-    # import matplotlib.pyplot as plt
-    # data = pickle.load(open('saved_files/competition_loop_data_4_firms_10_retrain.pkl', 'rb'))
-    # print(data)
-    # x = [[elem[0]["sac"][k][0] for elem in data] for k in range(4)]
-    # for k in range(4):
-    #     plt.plot(np.arange(len(x[k])), x[k], label=f'Firm {k} SAC')
-    # plt.xlabel('Retrain Iteration')
-    # plt.ylabel('Overall Profit')
-    # plt.title('Overall Profit vs Retrain Iteration for Each Firm')
+    in_loop_retraining(experiment="first_firm_constant", firm_count=4, episodes_before_retrain=7, max_retrain=10)

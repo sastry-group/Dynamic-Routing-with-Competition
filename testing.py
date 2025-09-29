@@ -199,7 +199,7 @@ def multi_test(input_config):
     # no_ctrl_device = device = torch.device("cuda" if use_cuda else "cpu")
     # control_data = get_no_control_performance(cfg, no_ctrl_env, no_ctrl_parser, no_ctrl_device, use_saved_data=cfg.simulator.reuse_no_control)
 
-    plot_multi_fleet_comparison(cfg, env, data)
+    # plot_multi_fleet_comparison(cfg, env, data)
 
     return data
 

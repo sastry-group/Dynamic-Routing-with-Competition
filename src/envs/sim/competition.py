@@ -208,7 +208,7 @@ class CompetitionSim:
             # done.append(f.done)
             info.append(f.info)
             f.obs, rew, f.done, f.info = f.pax_step(d, p, self.travelTime)
-            print(f"Pax: {rew} -- Total: {rew}")
+            # print(f"Pax: {rew} -- Total: {rew}")
             paxreward.append(rew)
             f.reward = 0
         done = (self.tf == self.time+1)
@@ -264,7 +264,7 @@ class CompetitionSim:
         #     f.advance()
         # self.t += 1
         # self.allocator.step()
-        print(f"Rebalancing: {rebreward} -- Pax: {reward} -- Total: {reward+rebreward}")
+        # print(f"Rebalancing: {rebreward} -- Pax: {reward} -- Total: {reward+rebreward}")
 
         done = (self.tf == self.time + 1)
         # collect per-fleet per-step info if needed

@@ -304,7 +304,7 @@ class AMoD:
         info['profit'] = paxreward
         rew += paxreward
         done = (self.tf == self.time+1) # if the episode is completed
-        print(f"Rebalancing: {rebreward} -- Pax: {paxreward} -- Total: {rew}")
+        # print(f"Rebalancing: {rebreward} -- Pax: {paxreward} -- Total: {rew}")
         return obs, rew, done, info
     
     def reset(self, multi_agent = False):
@@ -346,7 +346,7 @@ class AMoD:
 
         if not multi_agent:
             obs, paxreward, done, info = self.pax_step(CPLEXPATH=self.cfg.cplexpath, PATH=self.cfg.directory)
-            print(f"Pax: {paxreward} -- Total: {paxreward}")
+            # print(f"Pax: {paxreward} -- Total: {paxreward}")
         else:
             paxreward = 0
             done = False
@@ -462,7 +462,7 @@ class Fleet:
         # Pricing parameters
         self.alpha = cfg.model.alpha
         self.max_supply = sum([self.acc[n][0] for n in self.regions])
-        print("Fleet max supply:", self.max_supply)
+        # print("Fleet max supply:", self.max_supply)
 
         for e in self.G.edges:
             self.rebFlow[e] = defaultdict(float)
@@ -843,28 +843,35 @@ class Scenario:
                 for n in self.G.nodes:
                     self.G.nodes[n]['accInit'] = round(10/supply_factor)
             else: 
-                # if initial_vehicle_distribution == "random":
-                #     for item in data["totalAcc"]:
-                #         hr, acc = item["hour"], item["acc"]
-                #         if hr == json_hr+int(round(json_tstep/2*tf/60)):
-                #             for n in self.G.nodes:
-                #                 # self.G.nodes[n]['accInit'] = round(int(acc/len(self.G))/supply_factor)
-                #                 num_vehicles = round(int(acc/len(self.G)) / supply_factor)
-                #                 rand_num_vehicles = np.random.randint(0, num_vehicles + 1)
-                #                 # print(f"Number of vehicles in region {n} at the beginning: {rand_num_vehicles}")
-                #                 self.G.nodes[n]['accInit'] = rand_num_vehicles
-                #                 # print(self.G.nodes[n])
-                # else:
-                for item in data["totalAcc"]:
-                    hr, acc = item["hour"], item["acc"]
-                    if hr == json_hr+int(round(json_tstep/2*tf/60)):
-                        for n in self.G.nodes:
-                            self.G.nodes[n]['accInit'] = int(acc/len(self.G)) // supply_factor
-                        self.total_vehicles = int(acc) // supply_factor
+                if initial_vehicle_distribution == "random":
+                    for item in data["totalAcc"]:
+                        hr, acc = item["hour"], item["acc"]
+                        if hr == json_hr+int(round(json_tstep/2*tf/60)):
+                            self.total_vehicles = acc // supply_factor
+                            for n in self.G.nodes:
+                                self.G.nodes[n]['accInit'] = 0
+                            # randomly assign vehicles to different regions
+                            for _ in range(self.total_vehicles):
+                                n = np.random.randint(0, len(self.G))
+                                self.G.nodes[n]['accInit'] += 1
+                            # for n in self.G.nodes:
+                            #     # self.G.nodes[n]['accInit'] = round(int(acc/len(self.G))/supply_factor)
+                            #     num_vehicles = round(int(acc/len(self.G)) / supply_factor)
+                            #     rand_num_vehicles = np.random.randint(0, num_vehicles + 1)
+                            #     # print(f"Number of vehicles in region {n} at the beginning: {rand_num_vehicles}")
+                            #     self.G.nodes[n]['accInit'] = rand_num_vehicles
+                            #     # print(self.G.nodes[n])
+                else:
+                    for item in data["totalAcc"]:
+                        hr, acc = item["hour"], item["acc"]
+                        if hr == json_hr+int(round(json_tstep/2*tf/60)):
+                            total_vehicles = 0
+                            for n in self.G.nodes:
+                                self.G.nodes[n]['accInit'] = int(acc/len(self.G)) // supply_factor
+                                total_vehicles += self.G.nodes[n]['accInit']
+                            self.total_vehicles = total_vehicles
             self.tripAttr = self.get_random_demand()
                 
-        
-        
     def get_random_demand(self, reset = False):        
         # generate demand and price
         # reset = True means that the function is called in the reset() method of AMoD enviroment,
