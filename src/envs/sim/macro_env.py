@@ -52,10 +52,15 @@ class AMoD:
             self.G.edges[i,j]['time'] = self.rebTime[i,j][self.time]
             self.rebFlow[i,j] = defaultdict(float)
         for i,j in self.demand:
-            self.paxFlow[i,j] = defaultdict(float)            
+            self.paxFlow[i,j] = defaultdict(float)  
+        total_vehicles = 0
         for n in self.region:
             self.acc[n][0] = self.G.nodes[n]['accInit']
-            self.dacc[n] = defaultdict(float)   
+            self.dacc[n] = defaultdict(float) 
+            total_vehicles += self.G.nodes[n]['accInit'] 
+        self.total_vehicles = total_vehicles
+        self.alpha = cfg.alpha # sensitivity parameter for price computation
+        self.pricing_model = "equal"
         self.beta = beta * scenario.tstep
         t = self.time
         self.servedDemand = defaultdict(dict)
@@ -124,8 +129,11 @@ class AMoD:
 
         demand = {(i, j): self.demand[i,j][t] for i,j in self.demand if t in self.demand[i,j] and self.demand[i,j][t]>1e-3}
 
-        price = {(i, j): self.price[i,j][t] for i,j in self.price if t in self.demand[i,j] and self.demand[i,j][t]>1e-3}
-        
+        if self.pricing_model == "equal":
+            price = {(i, j): self.price[i,j][t] for i,j in self.price if t in self.demand[i,j] and self.demand[i,j][t]>1e-3}
+        elif self.pricing_model == "cournot":
+            price = {(i, j): self.get_cournot_price(i,j,t) for i,j in self.price if t in self.demand[i,j] and self.demand[i,j][t]>1e-3}
+
         demand_edges = [(i, j) for i,j in self.demand if t in self.demand[i,j] and self.demand[i,j][t]>1e-3]
 
         region = [n for n in acc_init]
@@ -162,6 +170,16 @@ class AMoD:
         else:
             print(f"Passenger optimization failed with status: {LpStatus[status]}")
             return None
+        
+    def get_cournot_price(self, i, j, t):
+        num_vehs_i = self.acc[i][t]  # total supply at time t+1 # CHECK
+        a = self.price[i,j][t]
+        b = self.alpha * a * (1 / self.total_vehicles)
+        # b = 0 # TEMPORARY, CHANGE LATER
+        cournot_price = max(0.0, a - b * num_vehs_i)
+        # print(supply, q_total, p) # or current planned quantity
+        # print(f"Cournot price for edge ({i},{j}) at time {t}: {cournot_price}, and p,q: {p}, {q_total}")
+        return cournot_price
     
     # pax step
     def pax_step(self, paxAction=None, CPLEXPATH=None, PATH='', platform =  'linux'):

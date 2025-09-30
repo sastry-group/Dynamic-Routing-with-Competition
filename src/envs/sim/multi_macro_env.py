@@ -542,6 +542,7 @@ class Fleet:
             # supply, number of initial vehicles (constant right now)
             a = price
             b = self.alpha * a * (1 / self.max_supply)
+            b = 0 # TEMPORARY, CHANGE LATER
             cournot_price = max(0.0, a - b * num_vehs_i)
             # print(supply, q_total, p) # or current planned quantity
             # print(f"Cournot price for edge ({i},{j}) at time {t}: {cournot_price}, and p,q: {p}, {q_total}")
