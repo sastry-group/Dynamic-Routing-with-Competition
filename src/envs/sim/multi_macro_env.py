@@ -541,16 +541,10 @@ class Fleet:
             num_vehs_i = self.acc[i][t]  # total supply at time t+1 # CHECK
             # supply, number of initial vehicles (constant right now)
             a = price
-<<<<<<< HEAD
             # b = self.alpha * a * (1 / (self.max_supply/self.nregion))
             b = self.alpha * a * (1 / (self.max_supply)) # Option for a harder setting
             # b = 0 # TEMPORARY, CHANGE LATER
             cournot_price = max(price/2, a - b * num_vehs_i)
-=======
-            # b = self.alpha * a * (1 / self.max_supply)
-            b = 0.0
-            cournot_price = max(0.0, a - b * num_vehs_i)
->>>>>>> fa00e36 (line trend)
             # print(supply, q_total, p) # or current planned quantity
             # print(f"Cournot price for edge ({i},{j}) at time {t}: {cournot_price}, and p,q: {p}, {q_total}")
             return cournot_price
