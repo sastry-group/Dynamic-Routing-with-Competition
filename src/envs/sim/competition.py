@@ -86,10 +86,8 @@ class CompetitionSim:
     This class drives the episode and queries each model for actions.
     """
     def __init__(self, scenario, fleets):
-        # self.rule="equal"
-        # self.rule = "cournot"
-        self.rule = "equal_deterministic"
-        self.pricing_model = "cournot"
+        self.rule = scenario.demand_filter_type
+        self.pricing_model = scenario.pricing_model
         self.eps=1e-9
         self.scenario = scenario
         self.travelTime = self.scenario.demandTime

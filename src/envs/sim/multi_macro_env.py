@@ -789,6 +789,7 @@ class Scenario:
             #     scale = firm_count
             self.firm_count = firm_count
             self.demand_filter_type = demand_filter_type
+            self.pricing_model = pricing_model
             scale = 1
                 
 

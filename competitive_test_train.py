@@ -38,7 +38,7 @@ def in_loop_retraining(experiment = "first_firm_constant", firm_count=4, episode
             "simulator.agents_know_partial_demand": True,
             "simulator.constant_vehicle_count": True,
             "simulator.demand_filter_type": "equal_deterministic" ,
-            "simulator.pricing_model": "equal",
+            "simulator.pricing_model": "cournot",
             "simulator.initial_vehicle_distribution": "random",
             "model.loop_number": retrain_count
         }
