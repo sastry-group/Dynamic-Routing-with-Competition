@@ -541,8 +541,8 @@ class Fleet:
             num_vehs_i = self.acc[i][t]  # total supply at time t+1 # CHECK
             # supply, number of initial vehicles (constant right now)
             a = price
-            # b = self.alpha * a * (1 / (self.max_supply/self.nregion))
-            b = self.alpha * a * (1 / (self.max_supply)) # Option for a harder setting
+            b = self.alpha * a * (1 / (self.max_supply/self.nregion))
+            # b = self.alpha * a * (1 / (self.max_supply)) # Option for a harder setting
             # b = 0 # TEMPORARY, CHANGE LATER
             cournot_price = max(price/2, a - b * num_vehs_i)
             # print(supply, q_total, p) # or current planned quantity
