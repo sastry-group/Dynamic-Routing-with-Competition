@@ -121,6 +121,7 @@ class SAC(nn.Module):
         self.device = device
         self.path = None
         self.act_dim = env.nregion
+        self.wandb = None
 
         # SAC parameters
         self.alpha = cfg.alpha

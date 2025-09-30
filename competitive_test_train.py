@@ -37,7 +37,7 @@ def in_loop_retraining(experiment = "first_firm_constant", firm_count=4, episode
             "simulator.firm_count": firm_count,
             "simulator.agents_know_partial_demand": True,
             "simulator.constant_vehicle_count": True,
-            "simulator.demand_filter_type": "equal" ,
+            "simulator.demand_filter_type": "equal_deterministic" ,
             "simulator.pricing_model": "equal",
             "simulator.initial_vehicle_distribution": "random",
             "model.loop_number": retrain_count
@@ -65,7 +65,7 @@ def in_loop_retraining(experiment = "first_firm_constant", firm_count=4, episode
                 "model.cplexpath": None,
                 "model.checkpoint_path": firm_policies[k],  # Save new model to new file
                 "model.max_episodes": 100, # Was 50
-                "model.wandb": True,
+                "model.wandb": False,
                 "simulator.reuse_no_control": False,
                 "simulator.firm_count": 1,
                 "simulator.agents_know_partial_demand": True,
@@ -75,7 +75,7 @@ def in_loop_retraining(experiment = "first_firm_constant", firm_count=4, episode
                 "model.alpha": alphas[k]
             }
             train(config)
-        output_data.append(data)
+        # output_data.append(data)
         print(f"Profits after retrain {retrain_count}: ", [data[0]["sac"][k][0] for k in range(K)])
         retrain_count += 1
 
@@ -135,4 +135,4 @@ def replot(filename):
 
 
 if __name__ == "__main__":
-    in_loop_retraining(experiment="first_firm_constant", firm_count=4, episodes_before_retrain=100, max_retrain=5)
+    in_loop_retraining(experiment="first_firm_constant", firm_count=4, episodes_before_retrain=20, max_retrain=10)

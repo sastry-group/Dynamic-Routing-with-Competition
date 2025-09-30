@@ -87,7 +87,8 @@ class CompetitionSim:
     """
     def __init__(self, scenario, fleets):
         # self.rule="equal"
-        self.rule = "cournot"
+        # self.rule = "cournot"
+        self.rule = "equal_deterministic"
         self.pricing_model = "cournot"
         self.eps=1e-9
         self.scenario = scenario
@@ -282,6 +283,11 @@ class CompetitionSim:
                 share = D / K
                 for k in range(K):
                     demand_per_firm[k][e] = share
+            return demand_per_firm
+        elif self.rule == "equal_deterministic":
+            for e, D in demand_global_t.items():
+                for k in range(K):
+                    demand_per_firm[k][e] = D
             return demand_per_firm
 
         # as a function of price 

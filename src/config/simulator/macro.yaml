@@ -35,3 +35,5 @@ demand_filter_type: "portion"
 initial_vehicle_distribution: None  # Options: "random", None for equal
 
 pricing_model: "exogenous"  # Options: "cournot", "bertrand", "exogenous"
+
+alpha: 0.3

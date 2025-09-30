@@ -787,6 +787,8 @@ class Scenario:
             #     scale = 1
             # else:
             #     scale = firm_count
+            self.firm_count = firm_count
+            self.demand_filter_type = demand_filter_type
             scale = 1
                 
 
@@ -891,7 +893,10 @@ class Scenario:
             for t in range(0,self.tf*2):
                 for i,j in self.edges:                
                     if (i,j) in self.demand_input and t  in self.demand_input[i,j]:
-                        demand[i,j][t] = np.random.poisson(self.demand_input[i,j][t])
+                        if self.demand_filter_type == 'equal_deterministic':
+                            demand[i,j][t] = np.random.poisson(self.demand_input[i,j][t] / self.firm_count)
+                        else:
+                            demand[i,j][t] = np.random.poisson(self.demand_input[i,j][t])
                         # if self.demand_input[i,j][t] != 0:
                         #     print(f"Demand, generated input for edge ({i},{j}) at time {t}: {self.demand_input[i,j][t]}, {demand[i,j][t]}")
                         price[i,j][t] = self.p[i,j][t]
