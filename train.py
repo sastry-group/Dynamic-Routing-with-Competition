@@ -49,6 +49,7 @@ def setup_macro(cfg):
     sd=cfg.seed,
     json_tstep=cfg.json_tsetp,
     tf=cfg.max_steps,
+    pricing_model=cfg.pricing_model
     )
     env = AMoD(scenario, cfg = cfg, beta = calibrated_params[city]["beta"])
     parser = GNNParser(env, T=cfg.time_horizon, json_file=f"src/envs/data/macro/scenario_{city}.json")

@@ -365,7 +365,8 @@ class AMoD:
     
 class Scenario:
     def __init__(self, N1=2, N2=4, tf=60, sd=None, ninit=5, tripAttr=None, demand_input=None, demand_ratio = None,
-                 trip_length_preference = 0.25, grid_travel_time = 1, fix_price=True, alpha = 0.2, json_file = None, json_hr = 9, json_tstep = 2, varying_time=False, json_regions = None, prune=False):
+                 trip_length_preference = 0.25, grid_travel_time = 1, fix_price=True, alpha = 0.2, json_file = None, 
+                 json_hr = 9, json_tstep = 2, varying_time=False, json_regions = None, prune=False, pricing_model = "exogenous"):
         # trip_length_preference: positive - more shorter trips, negative - more longer trips
         # grid_travel_time: travel time between grids
         # demand_input： list - total demand out of each region, 
@@ -452,6 +453,8 @@ class Scenario:
             self.json_start = json_hr * 60
             self.tf = tf
             self.edges = list(self.G.edges) + [(i,i) for i in self.G.nodes]
+
+            self.pricing_model = pricing_model
 
                     
             for i,j in self.demand_input:

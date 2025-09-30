@@ -446,7 +446,8 @@ def convert(data, sim, json_start=0, json_tstep=1, extra_data=None, demand_ratio
                     "destination": j,
                     "demand": inner_demand[time_stamp],
                     "travel_time": sim.travelTime[(i,j)][time_stamp],
-                    "price": inner_prices[time_stamp]
+                    # "price": inner_prices[time_stamp]
+                    "price": default_prices[time_stamp]
                 })
         firm_result = {"nlat": sim.scenario.N1, "nlon": sim.scenario.N2, "demand": firm_result}
         if extra_data is not None:
