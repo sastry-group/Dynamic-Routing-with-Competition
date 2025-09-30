@@ -47,7 +47,8 @@ def in_loop_retraining(experiment = "first_firm_constant", firm_count=4, episode
 
         output_data.append(data)
         print(f"Profits after retrain {retrain_count}: ", [data[0]["sac"][k][0] for k in range(K)])
-
+        if retrain_count >= max_retrain:
+            print("Reached maximum retrain count. Ending loop.")
         if retrain_count >= max_retrain:
             break
         # Retrain model for each agent
@@ -106,6 +107,9 @@ def in_loop_retraining(experiment = "first_firm_constant", firm_count=4, episode
     # x = [[elem[0]["sac"][k][0] for elem in data] for k in range(4)]
     for k in range(4):
         plt.plot(np.arange(len(x[k])), x[k], label=f'Firm {k} SAC, alpha={alphas[k]:.2f}')
+        z = np.polyfit(np.arange(len(x[k])), x[k], 1)
+        p = np.poly1d(z)
+        plt.plot(np.arange(len(x[k])), p(np.arange(len(x[k]))), linestyle='--', label=f'Firm {k} Trend')
     plt.legend()
     plt.xlabel('Retrain Iteration')
     plt.ylabel('Overall Profit')
@@ -126,6 +130,9 @@ def replot(filename):
     x = [[elem[0]["sac"][k][0] for elem in data] for k in range(4)]
     for k in range(4):
         plt.plot(np.arange(len(x[k])), x[k], label=f'Firm {k} SAC, alpha={alphas[k]:.2f}')
+        z = np.polyfit(np.arange(len(x[k])), x[k], 1)
+        p = np.poly1d(z)
+        plt.plot(np.arange(len(x[k])), p(np.arange(len(x[k]))), linestyle='--', label=f'Firm {k} Trend')
     plt.legend()
     plt.xlabel('Retrain Iteration')
     plt.ylabel('Overall Profit')
