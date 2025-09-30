@@ -16,7 +16,8 @@ def in_loop_retraining(experiment = "first_firm_constant", firm_count=4, episode
     K = firm_count
 
     firm_policies = [f"SAC_portion_{firm_count}" for _ in range(K)]  # Initial policies for each firm
-    alphas = [random.uniform(sys.float_info.epsilon, 1 - sys.float_info.epsilon) for _ in range(K)]
+    # alphas = [random.uniform(sys.float_info.epsilon, 1 - sys.float_info.epsilon) for _ in range(K)]
+    alphas = [0.5, 0.6, 0.3, 0.8]
     output_data = []
     
     while True:
@@ -104,8 +105,16 @@ def in_loop_retraining(experiment = "first_firm_constant", firm_count=4, episode
         alphas = pickle.load(f)
     x = [[elem[0]["sac"][k][0] for elem in output_data] for k in range(4)]
     # x = [[elem[0]["sac"][k][0] for elem in data] for k in range(4)]
+    window = 5
     for k in range(4):
         plt.plot(np.arange(len(x[k])), x[k], label=f'Firm {k} SAC, alpha={alphas[k]:.2f}')
+        weights = np.ones(window) / window
+        moving_avg = np.convolve(x[k], weights, mode='valid')
+        plt.plot(np.arange(window-1, len(x[k])), moving_avg, linestyle=':', 
+                label=f'Firm {k} Moving Avg ({window})')
+        z = np.polyfit(np.arange(len(x[k])), x[k], 1)
+        p = np.poly1d(z)
+        plt.plot(np.arange(len(x[k])), p(np.arange(len(x[k]))), linestyle='--', label=f'Firm {k} Trend')
     plt.legend()
     plt.xlabel('Retrain Iteration')
     plt.ylabel('Overall Profit')
@@ -126,6 +135,9 @@ def replot(filename):
     x = [[elem[0]["sac"][k][0] for elem in data] for k in range(4)]
     for k in range(4):
         plt.plot(np.arange(len(x[k])), x[k], label=f'Firm {k} SAC, alpha={alphas[k]:.2f}')
+        z = np.polyfit(np.arange(len(x[k])), x[k], 1)
+        p = np.poly1d(z)
+        plt.plot(np.arange(len(x[k])), p(np.arange(len(x[k]))), linestyle='--', label=f'Firm {k} Trend')
     plt.legend()
     plt.xlabel('Retrain Iteration')
     plt.ylabel('Overall Profit')
@@ -135,4 +147,4 @@ def replot(filename):
 
 
 if __name__ == "__main__":
-    in_loop_retraining(experiment="first_firm_constant", firm_count=4, episodes_before_retrain=20, max_retrain=10)
+    in_loop_retraining(experiment="first_firm_constant", firm_count=4, episodes_before_retrain=20, max_retrain=40)

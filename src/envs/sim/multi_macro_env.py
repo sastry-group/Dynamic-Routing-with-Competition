@@ -30,12 +30,14 @@ class AMoD:
         self.arrDemand = dict()
         self.region = list(self.G) # set of regions
         self.cfg = cfg 
+        self.alpha = cfg.alpha
         self.firm_count = cfg.firm_count # number of firms
         # self.pricing_model = cfg.pricing_model # pricing model, e.g. "cournot", "bertrand", "exogenous"   
         for i in self.region:
             self.depDemand[i] = defaultdict(float)
             self.arrDemand[i] = defaultdict(float)
-            
+        
+        
         self.price = defaultdict(dict) # price
         self.pricing_model = cfg.pricing_model # pricing model, e.g. "cournot", "bertrand", "exogenous"
         for i,j,t,d,p in scenario.tripAttr: # trip attribute (origin, destination, time of request, demand, price)
@@ -66,6 +68,7 @@ class AMoD:
         for n in self.region:
             self.acc[n][0] = self.G.nodes[n]['accInit']
             self.dacc[n] = defaultdict(float)   
+        self.max_supply = sum([self.acc[n][0] for n in self.region])
         self.beta = beta * scenario.tstep
         t = self.time
         self.servedDemand = defaultdict(dict)
@@ -161,7 +164,12 @@ class AMoD:
             # here we are taking all the demand requests
             # print(f"Setting the demand to receive all of them")
             agent_demand = {(i, j): self.demand[i,j][t] for ind, (i,j) in enumerate(self.demand) if t in self.demand[i,j] and self.demand[i,j][t]>1e-3}
-            agent_price = {(i, j): self.price[i,j][t] for ind, (i,j) in enumerate(self.price) if t in self.demand[i,j] and self.demand[i,j][t]>1e-3}
+            agent_price = {}
+            # agent_price = {(i, j): self.price[i,j][t] for ind, (i,j) in enumerate(self.price) if t in self.demand[i,j] and self.demand[i,j][t]>1e-3}
+            for ind, (i,j) in enumerate(self.demand):
+                if t in self.demand[i,j] and self.demand[i,j][t]>1e-3:
+                    fixed_price = self.price[i,j][t]
+                    agent_price[(i,j)] = self.compute_price(i, j, t, fixed_price, agent_demand[(i,j)], pricing_model=self.pricing_model)
             agent_demand_edges = [(i, j) for ind, (i,j) in enumerate(self.demand) if t in self.demand[i,j] and self.demand[i,j][t]>1e-3]  
 
         # print(f"agent_demand: {agent_demand}")    
@@ -396,24 +404,16 @@ class AMoD:
         return self.obs
     
 
-    def compute_price(self, i, j, t, base_price, total_supply, pricing_model):
+    def compute_price(self, i, j, t, base_price, demand, pricing_model):
         # print(pricing_model)
         # model: "cournot", "bertrand", "exogenous"
-        pricing_model = None
         if pricing_model == "cournot":
-            try:
-                q_total = sum(self.firms[f].acc[i][t] for f in range(self.firm_count))
-            except KeyError:
-                q_total = sum(self.initial_vehicle_distribution[f][i] for f in range(self.firm_count))
-            if q_total <= 0:
-                return base_price 
-
-            # supply, number of initial vehicles (constant right now)
-            # chekcing the q_total with total_Supplu
+            num_vehs_i = self.acc[i][t]
             a = base_price 
-            alpha = 0.1
-            b = alpha * a * (1 / total_supply)
-            cournot_price = a - b * total_supply
+            alpha = self.alpha
+            q_total = self.max_supply/self.nregion
+            b = alpha * a * (1 / q_total)
+            cournot_price = max(a/2, a - b * num_vehs_i)
             # print(supply, q_total, p) # or current planned quantity
             # print(f"Cournot price for edge ({i},{j}) at time {t}: {cournot_price}, and p,q: {p}, {q_total}")
             return cournot_price
