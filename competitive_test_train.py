@@ -29,7 +29,7 @@ def in_loop_retraining(experiment = "first_firm_constant", firm_count=4, episode
             "model.name": ["sac"],
             "simulator.city": "nyc_brooklyn",
             "model.cplexpath": None,
-            "model.test_episodes": 7,
+            "model.test_episodes": episodes_before_retrain,
             "model.checkpoint_path": firm_policies,
             "model.alpha": alphas,
             "simulator.reuse_no_control": False,
@@ -63,12 +63,14 @@ def in_loop_retraining(experiment = "first_firm_constant", firm_count=4, episode
                 "simulator.demand": f"historical_demand_sac_firm_{k}_{retrain_count}",
                 "model.cplexpath": None,
                 "model.checkpoint_path": firm_policies[k],  # Save new model to new file
-                "model.max_episodes": 5, # Was 50
+                "model.max_episodes": 100, # Was 50
                 "simulator.reuse_no_control": False,
                 "simulator.firm_count": 1,
                 "simulator.agents_know_partial_demand": True,
                 "simulator.constant_vehicle_count": True,
-                "simulator.demand_filter_type": "flow" 
+                "simulator.pricing_model": "cournot",
+                "simulator.demand_filter_type": "flow",
+                "model.alpha": alphas[k]
             }
             train(config)
         # output_data.append(data)
@@ -118,4 +120,4 @@ def replot(filename):
 
 
 if __name__ == "__main__":
-    in_loop_retraining(experiment="first_firm_constant", firm_count=4, episodes_before_retrain=7, max_retrain=10)
+    in_loop_retraining(experiment="first_firm_constant", firm_count=4, episodes_before_retrain=100, max_retrain=5)
