@@ -15,14 +15,15 @@ def in_loop_retraining(experiment = "first_firm_constant", firm_count=4, episode
     retrain_count = 0
     K = firm_count
 
-    firm_policies = [f"SAC_portion_{firm_count}" for _ in range(K)]  # Initial policies for each firm
+     # Initial policies for each firm
     # alphas = [random.uniform(sys.float_info.epsilon, 1 - sys.float_info.epsilon) for _ in range(K)]
     alphas = [0.5, 0.6, 0.3, 0.8]
+    firm_policies = [f"SAC_initial_firm4_alpha{alphas[i]}" for i in range(K)] 
     output_data = []
     
     while True:
         if experiment == "first_firm_constant":
-            firm_policies[0] = f"SAC_portion_{firm_count}"
+            firm_policies[0] = f"SAC_initial_firm4_alpha{alphas[0]}"
 
         # Test the model for episodes_before_retrain episodes
         config = {
@@ -41,7 +42,8 @@ def in_loop_retraining(experiment = "first_firm_constant", firm_count=4, episode
             "simulator.demand_filter_type": "price_based" ,
             "simulator.pricing_model": "cournot",
             "simulator.initial_vehicle_distribution": "random",
-            "model.loop_number": retrain_count
+            "model.loop_number": retrain_count,
+            "simulator.competition": True
         }
         data = testing.multi_test(config)
         # test_results, data_files = testing.test_approach(cfg, env, parser, device, loop_number=retrain_count, name="sac")
@@ -74,7 +76,8 @@ def in_loop_retraining(experiment = "first_firm_constant", firm_count=4, episode
                 "simulator.constant_vehicle_count": True,
                 "simulator.pricing_model": "cournot",
                 "simulator.demand_filter_type": "flow",
-                "model.alpha": alphas[k]
+                "simulator.alpha": alphas[k],
+                "simulator.competition": True
             }
             train(config)
         # output_data.append(data)
