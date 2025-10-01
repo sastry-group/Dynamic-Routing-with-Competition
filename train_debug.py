@@ -18,8 +18,9 @@
 from train import train
 import numpy as np
 
-alphas = [0.5, 0.6, 0.3, 0.8]
-alpha_choice = np.random.choice(alphas)
+alphas = [0.3, 0.5, 0.6, 0.8]
+# alpha_choice = np.random.choice(alphas)
+alpha_choice = 0.6
 config = {
                 "simulator.name": "multi_macro",
                 "model.name": "sac",

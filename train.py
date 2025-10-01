@@ -91,7 +91,8 @@ def setup_multi_macro(cfg):
         firm_count=cfg.firm_count,
         demand_filter_type = cfg.demand_filter_type,
         initial_vehicle_distribution= cfg.initial_vehicle_distribution,
-        pricing_model= cfg.pricing_model
+        pricing_model= cfg.pricing_model,
+        alpha_pricing = cfg.alpha
     )
     env = AMoD(scenario, cfg = cfg, beta = calibrated_params[city]["beta"])
     parser = GNNParser(env, T=cfg.time_horizon, json_file=f"src/envs/data/multi_macro/scenario_{city}.json")

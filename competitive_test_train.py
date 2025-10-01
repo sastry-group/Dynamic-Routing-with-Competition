@@ -34,7 +34,7 @@ def in_loop_retraining(experiment = "first_firm_constant", firm_count=4, episode
             "model.cplexpath": None,
             "model.test_episodes": episodes_before_retrain,
             "model.checkpoint_path": firm_policies,
-            "model.alpha": alphas,
+            "model.alpha": alphas, # I think we should move this to simulator.alphas
             "simulator.reuse_no_control": False,
             "simulator.firm_count": firm_count,
             "simulator.agents_know_partial_demand": True,
@@ -43,7 +43,7 @@ def in_loop_retraining(experiment = "first_firm_constant", firm_count=4, episode
             "simulator.pricing_model": "cournot",
             "simulator.initial_vehicle_distribution": "random",
             "model.loop_number": retrain_count,
-            "simulator.competition": True
+            "simulator.competition": True     # this is a new thing i added for competition, this is what toggled the multi in test_approach
         }
         data = testing.multi_test(config)
         # test_results, data_files = testing.test_approach(cfg, env, parser, device, loop_number=retrain_count, name="sac")
@@ -75,7 +75,7 @@ def in_loop_retraining(experiment = "first_firm_constant", firm_count=4, episode
                 "simulator.constant_vehicle_count": True,
                 "simulator.pricing_model": "cournot",
                 "simulator.demand_filter_type": "flow",
-                "simulator.alpha": alphas[k],
+                "simulator.alpha": alphas[k],   # for training use simulator
                 "simulator.competition": True
             }
             train(config)
