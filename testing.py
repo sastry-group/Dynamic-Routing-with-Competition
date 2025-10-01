@@ -188,10 +188,12 @@ def multi_test(input_config):
         use_cuda = not cfg.model.no_cuda and torch.cuda.is_available()
         device = torch.device("cuda" if use_cuda else "cpu")
 
-        (profit, inflows), file_names = test_approach(cfg, env, parser, device, loop_number=config["model.loop_number"], name=f"_{config['model.name']}")
-        data[0][config["model.name"]], data[1][config['model.name']], data[2][config['model.name']] = profit, inflows, file_names
-        # profit, inflows= test_approach(cfg, env, parser, device)
-        # data[0][config["model.name"]], data[1][config['model.name']] = profit, inflows
+        if cfg.simulator.competition:
+            (profit, inflows), file_names = test_approach(cfg, env, parser, device, loop_number=config["model.loop_number"], name=f"_{config['model.name']}")
+            data[0][config["model.name"]], data[1][config['model.name']], data[2][config['model.name']] = profit, inflows, file_names
+        else:
+            profit, inflows= test_approach(cfg, env, parser, device)
+            data[0][config["model.name"]], data[1][config['model.name']] = profit, inflows
 
     # no_ctrl_cfg = ...
     # no_ctrl_env = ...
@@ -199,7 +201,13 @@ def multi_test(input_config):
     # no_ctrl_device = device = torch.device("cuda" if use_cuda else "cpu")
     # control_data = get_no_control_performance(cfg, no_ctrl_env, no_ctrl_parser, no_ctrl_device, use_saved_data=cfg.simulator.reuse_no_control)
 
-    # plot_multi_fleet_comparison(cfg, env, data)
+    # if cfg.simulator.competition:
+    plot_multi_fleet_comparison(cfg, env, data)
+    # else: 
+    #     control_data = get_no_control_performance(cfg, env, parser, device, use_saved_data=cfg.simulator.reuse_no_control)
+
+    #     plot_comparison(cfg, env, control_data, data)
+
 
     return data
 
@@ -238,9 +246,9 @@ def save_sampled_demand(tripAttr, filename=None):
 
 def test_approach(cfg, env, parser, device, loop_number=0, name=""):
 
-    multi = cfg.simulator.firm_count 
+    competition = cfg.simulator.competition 
 
-    if not multi: # or multi <= 1:
+    if not competition:
         model = setup_model(cfg, env, parser, device)
         
         print(f'Testing model {cfg.model.name} on {cfg.simulator.name} environment')
@@ -508,7 +516,7 @@ def plot_multi_fleet_comparison(cfg, env, comparison_data):
     width = 0.15  # the width of the bars
     num_bars = len(profit_data) + 1
 
-    fig, axs = plt.subplots(nrows=1, ncols=cfg.simulator.firm_count, figsize=(15, 5))
+    fig, axs = plt.subplots(nrows=1, ncols=cfg.simulator.firm_count, figsize=(18, 5))
     if cfg.simulator.firm_count == 1:
         axs = [axs]
 

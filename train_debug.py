@@ -30,11 +30,12 @@ config = {
                 "model.max_episodes": 50, # Was 50
                 "model.wandb": False,
                 "simulator.reuse_no_control": False,
-                "simulator.firm_count": 1,
+                "simulator.firm_count": 4,
                 "simulator.agents_know_partial_demand": True,
                 "simulator.constant_vehicle_count": True,
+                "simulator.competition": False,
                 "simulator.pricing_model": "cournot",
                 "simulator.demand_filter_type": "flow",
-                "model.alpha": alpha_choice
+                "simulator.alpha": alpha_choice
             }
 train(config)

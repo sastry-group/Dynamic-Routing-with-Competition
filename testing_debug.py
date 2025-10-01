@@ -27,25 +27,44 @@ importlib.reload(testing)
 
 # }
 
+# config = {
+#     "simulator.name": "multi_macro",
+#     "model.name": ["sac", "equal_distribution", "random"],
+#     # "model.name": ["sac"],
+#     "simulator.city": "nyc_brooklyn",
+#     # "simulator.demand": "historical_demand_firm_0_0",
+#     "model.cplexpath": None,
+#     "model.test_episodes": 1,
+#     "model.checkpoint_path": "SAC_flow_4",
+#     "model.loop_number": 0,
+#     "simulator.reuse_no_control": False,
+#     "simulator.firm_count": 4,
+#     "simulator.agents_know_partial_demand": True,
+#     "simulator.constant_vehicle_count": True,
+#     "simulator.demand_filter_type": "equal" ,
+#     "simulator.pricing_model": "equal"
+# }
+
+
+
 config = {
     "simulator.name": "multi_macro",
     "model.name": ["sac", "equal_distribution", "random"],
-    # "model.name": ["sac"],
-    "simulator.city": "nyc_brooklyn",
-    # "simulator.demand": "historical_demand_firm_0_0",
-    "model.cplexpath": None,
-    "model.test_episodes": 1,
-    "model.checkpoint_path": "SAC_flow_4",
-    "model.loop_number": 0,
-    "simulator.reuse_no_control": False,
+    "simulator.city": "nyc_brooklyn", 
+    "model.cplexpath": None, 
+    "model.test_episodes": 10,
+    "model.checkpoint_path": "SAC_initial_firm4_alpha0.8",
+    "simulator.reuse_no_control": True,
     "simulator.firm_count": 4,
-    "simulator.agents_know_partial_demand": True,
+    "simulator.agents_know_partial_demand": False,
+    "simulator.alpha": 0.8,
+    "model.loop_number": 0,
+    "simulator.competition": False,
     "simulator.constant_vehicle_count": True,
-    "simulator.demand_filter_type": "equal" ,
-    "simulator.pricing_model": "equal"
-}
+    "simulator.demand_filter_type": "flow" ,
+    "simulator.pricing_model": "cournot"
 
-
-
+    }
 
 testing.multi_test(config)
+
