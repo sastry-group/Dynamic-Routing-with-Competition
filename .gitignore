@@ -189,3 +189,9 @@ src/config/model/sarsa.yaml
 src/algos/sarsa.py
 
 src/envs/data/lux/input/**
+
+saved_files/
+
+ckpt/SAC_portion_4_**
+
+.DS_Store
