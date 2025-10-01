@@ -164,12 +164,15 @@ class AMoD:
             # here we are taking all the demand requests
             # print(f"Setting the demand to receive all of them")
             agent_demand = {(i, j): self.demand[i,j][t] for ind, (i,j) in enumerate(self.demand) if t in self.demand[i,j] and self.demand[i,j][t]>1e-3}
-            agent_price = {}
-            # agent_price = {(i, j): self.price[i,j][t] for ind, (i,j) in enumerate(self.price) if t in self.demand[i,j] and self.demand[i,j][t]>1e-3}
+            # agent_price = {}
+            agent_price = {(i, j): self.price[i,j][t] for ind, (i,j) in enumerate(self.price) if t in self.demand[i,j] and self.demand[i,j][t]>1e-3}
             for ind, (i,j) in enumerate(self.demand):
                 if t in self.demand[i,j] and self.demand[i,j][t]>1e-3:
                     fixed_price = self.price[i,j][t]
                     agent_price[(i,j)] = self.compute_price(i, j, t, fixed_price, agent_demand[(i,j)], pricing_model=self.pricing_model)
+                    self.price[i,j][t] = agent_price[(i,j)]
+                    # if i == 1 and j == 6:
+                        # print(f"AMoD price log MPulp ({i},{j}) at time {t}: with price : {agent_price[(i,j)] }")  
             agent_demand_edges = [(i, j) for ind, (i,j) in enumerate(self.demand) if t in self.demand[i,j] and self.demand[i,j][t]>1e-3]  
 
         # print(f"agent_demand: {agent_demand}")    
@@ -248,6 +251,8 @@ class AMoD:
 
             self.info['revenue'] += self.paxAction[k]*(self.price[i,j][t]) # Revenue from serving passengers
             self.info['profit'] += self.paxAction[k]*(self.price[i,j][t] - self.demandTime[i,j][t]*self.beta)  # profit is price - operating cost
+            # if i == 1 and j == 6:
+            #     print(f"Pax step in AMOD Step time {t} with price {self.price[i,j][t]}")
 
         self.obs = (self.acc, self.time, self.dacc, self.demand) # for acc, the time index would be t+1, but for demand, the time index would be t
         done = False # if passenger matching is executed first
@@ -338,7 +343,8 @@ class AMoD:
                 self.regionDemand[i][t] = 0
             else:
                 self.regionDemand[i][t] +=d
-            
+            # if i == 1 and j == 6:
+            #     print(f"Reset AMOD (passed to SAC ) price edge ({i},{j}) at time {t} price {p}")
         self.time = 0
         for i,j in self.G.edges:
             self.rebFlow[i,j] = defaultdict(float)
@@ -414,6 +420,8 @@ class AMoD:
             q_total = self.max_supply/self.nregion
             b = alpha * a * (1 / q_total)
             cournot_price = max(a/2, a - b * num_vehs_i)
+            # if i == 1 and j == 6:
+            #     print(f"(Inside AMOD) time {t} base price: {base_price}, i: {i}, j: {j}, num_vehs_i: {num_vehs_i}, cournot price: {cournot_price}")
             # print(supply, q_total, p) # or current planned quantity
             # print(f"Cournot price for edge ({i},{j}) at time {t}: {cournot_price}, and p,q: {p}, {q_total}")
             return cournot_price
@@ -684,7 +692,8 @@ class Scenario:
     def __init__(self, N1=2, N2=4, tf=60, sd=None, ninit=5, tripAttr=None, demand_input=None, demand_ratio = None,
                  trip_length_preference = 0.25, grid_travel_time = 1, fix_price=True, alpha = 0.2, json_file = None, 
                  json_hr = 9, json_tstep = 2, varying_time=False, json_regions = None, prune=False, supply_factor=1,
-                 firm_count =1, demand_filter_type = None, initial_vehicle_distribution = None, pricing_model = None):
+                 firm_count =1, demand_filter_type = None, initial_vehicle_distribution = None, pricing_model = None, 
+                 alpha_pricing = 0.2):
         # trip_length_preference: positive - more shorter trips, negative - more longer trips
         # grid_travel_time: travel time between grids
         # demand_input： list - total demand out of each region, 
@@ -770,7 +779,7 @@ class Scenario:
                 self.G = nx.complete_graph(self.N1*self.N2)
             self.G = self.G.to_directed()
             self.p = defaultdict(dict)
-            self.alpha = 0
+            self.alpha_pricing = alpha_pricing
             self.demandTime = defaultdict(dict)
             self.rebTime = defaultdict(dict)
             self.json_start = json_hr * 60
@@ -801,6 +810,7 @@ class Scenario:
                 flow_based_demand  = item["demand"] / scale 
                 # print(f"flow_based_demand: {flow_based_demand}, using demand_filter_type: {demand_filter_type}, scale: {scale}")                
                 t,o,d,v,tt,p = item["time_stamp"], item["origin"], item["destination"], flow_based_demand, item["travel_time"], item["price"]
+
                 # print(f"prices for edge ({o},{d}) at time {t}: {p}")
                 if json_regions!= None and (o not in json_regions or d not in json_regions):
                     continue
@@ -812,6 +822,9 @@ class Scenario:
 
                 self.p[o,d][(t-self.json_start)//json_tstep] += p*v*demand_ratio
                 self.demandTime[o,d][(t-self.json_start)//json_tstep] += tt*v*demand_ratio/json_tstep
+                # if o == 1 and d == 6:
+                #     print(f"Scenario init info: edge ({o},{d}) at time {t}: price w/demand {self.p[o,d][(t-self.json_start)//json_tstep]}, item price {p}")
+            # normalizing the price by demand, if demand is 0, then price is also
             
             
 
@@ -875,6 +888,9 @@ class Scenario:
                                 self.G.nodes[n]['accInit'] = int(acc/len(self.G)) // supply_factor
                                 total_vehicles += self.G.nodes[n]['accInit']
                             self.total_vehicles = total_vehicles
+            
+
+
             self.tripAttr = self.get_random_demand()
                 
     def get_random_demand(self, reset = False):        
@@ -901,6 +917,17 @@ class Scenario:
                             demand[i,j][t] = np.random.poisson(self.demand_input[i,j][t])
                         # if self.demand_input[i,j][t] != 0:
                         #     print(f"Demand, generated input for edge ({i},{j}) at time {t}: {self.demand_input[i,j][t]}, {demand[i,j][t]}")
+                        # if self.pricing_model == "cournot":
+                        #     num_vehs_i = self.G.nodes[i]['accInit']  ## already accounted per ghost firms
+                        #     a = self.p[i,j][t]
+                        #     alpha = self.alpha_pricing
+                        #     q_total = self.total_vehicles / len(self.G) ## ## already accounted per ghost firms
+                        #     b = alpha * a * (1 / q_total)
+                        #     price[i,j][t] = max(a/2, a - b * num_vehs_i)
+                        #     if i == 1 and j == 6:
+                        #         print(f"(Get random - should be init only) time {t} base price: {a}, i: {i}, j: {j}, num_vehs_i: {num_vehs_i}, cournot price: {price[i,j][t]}")
+
+                        # else:
                         price[i,j][t] = self.p[i,j][t]
                         # print(f"Price, generated input for edge ({i},{j}) at time {t}: {self.p[i,j][t]}")
                     else:
@@ -933,6 +960,7 @@ class Scenario:
             # generating demand and prices
             if self.fix_price:
                 p = self.p
+                
             for t in range(0,self.tf*2):
                 for i,j in self.edges:                
                     demand[i,j][t] = np.random.poisson(self.static_demand[i,j]*self.demand_ratio[i,j][t])
