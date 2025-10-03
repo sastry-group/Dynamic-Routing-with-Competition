@@ -100,8 +100,7 @@ def setup_multi_macro(cfg):
         firm_count=cfg.firm_count,
         demand_filter_type = cfg.demand_filter_type,
         initial_vehicle_distribution=cfg.initial_vehicle_distribution,
-        pricing_model=cfg.pricing_model,
-        alpha_pricing=cfg.alpha
+        pricing_model=cfg.pricing_model
 
     )
 
@@ -203,7 +202,7 @@ def multi_test(input_config):
     # control_data = get_no_control_performance(cfg, no_ctrl_env, no_ctrl_parser, no_ctrl_device, use_saved_data=cfg.simulator.reuse_no_control)
 
     # if cfg.simulator.competition:
-    plot_multi_fleet_comparison(cfg, env, data)
+    # plot_multi_fleet_comparison(cfg, env, data)
     # else: 
     #     control_data = get_no_control_performance(cfg, env, parser, device, use_saved_data=cfg.simulator.reuse_no_control)
 

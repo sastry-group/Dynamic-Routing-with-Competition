@@ -322,7 +322,8 @@ class CompetitionSim:
                 if demand_global_t[i,j]<1e-3:
                     continue
                 base_price = self.price[i,j].get(self.time, 0.0)
-                price_t[i,j] = f.compute_price(i, j, self.time, base_price, pricing_model=f.pricing_model)
+                # NOTE!: if you dont want the global supply for cournot don't pass self.fleets
+                price_t[i,j] = f.compute_price(i, j, self.time, base_price, pricing_model=f.pricing_model, global_fleets_info=self.fleets)
             fleet_prices.append(price_t)
             f.price = price_t
         return fleet_prices
