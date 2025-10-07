@@ -532,11 +532,11 @@ class Fleet:
         else:
             print(f"Passenger optimization failed with status: {LpStatus[status]}")
             return None
-        
-    def compute_price(self, i, j, t, price, pricing_model, global_fleets_info=None):
+
+    def compute_price(self, i, j, t, price, global_fleets_info=None):
         # print(pricing_model)
         # model: "cournot", "bertrand", "exogenous"
-        if pricing_model == "cournot":
+        if self.pricing_model == "cournot":
             # test for now, we could use historical demand-price
             if global_fleets_info is None:
                 num_vehs_i = self.acc[i][t]  # total supply at time t+1 # CHECK
@@ -545,14 +545,14 @@ class Fleet:
 
             # supply, number of initial vehicles (constant right now)
             a = price
-            # b = self.alpha * a * (1 / (self.max_supply/self.nregion))
-            b = self.alpha * a * (1 / (self.max_supply)) # Option for a harder setting
+            b = self.alpha * a * (1 / (self.max_supply/4)) # more aggressive pricing
+            # b = self.alpha * a * (1 / (self.max_supply))
             # b = 0 # TEMPORARY, CHANGE LATER
             cournot_price = max(price/2, a - b * num_vehs_i)
             # print(supply, q_total, p) # or current planned quantity
             # print(f"Cournot price for edge ({i},{j}) at time {t}: {cournot_price}, and p,q: {p}, {q_total}")
             return cournot_price
-        elif pricing_model == "bertrand":
+        elif self.pricing_model == "bertrand":
             return price
         else:
             return price
@@ -656,7 +656,7 @@ class Fleet:
         self.edges = list(set(self.edges))
         # self.demand = defaultdict(dict) # demand
         self.price = defaultdict(dict) # price
-        tripAttr = self.scenario.get_random_demand(reset=True)
+        # tripAttr = self.scenario.get_random_demand(reset=True)
         for i,j in self.G.edges:
             self.rebFlow[i,j] = defaultdict(float)
             self.paxFlow[i,j] = defaultdict(float) 
@@ -895,7 +895,10 @@ class Scenario:
         # converting demand_input to static_demand
         # skip this when resetting the demand
         # if not reset:
-        if self.is_json:
+        if self.demand_filter_type == "predetermined":
+            import pickle
+            tripAttr = pickle.load(open("tripAttr.pkl", "rb"))
+        elif self.is_json:
             for t in range(0,self.tf*2):
                 for i,j in self.edges:                
                     if (i,j) in self.demand_input and t  in self.demand_input[i,j]:
@@ -911,6 +914,8 @@ class Scenario:
                         demand[i,j][t] = 0
                         price[i,j][t] = 0
                     tripAttr.append((i,j,t,demand[i,j][t],price[i,j][t]))
+            import pickle
+            pickle.dump(tripAttr, open("tripAttr.pkl", "wb"))
         else:
             self.static_demand = dict()            
             region_rand = (np.random.rand(len(self.G))*self.alpha*2+1-self.alpha) 

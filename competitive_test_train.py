@@ -17,9 +17,10 @@ def in_loop_retraining(experiment = "first_firm_constant", firm_count=4, episode
 
      # Initial policies for each firm
     # alphas = [random.uniform(sys.float_info.epsilon, 1 - sys.float_info.epsilon) for _ in range(K)]
-    alphas = [0.3, 0.3, 0.3, 0.3]
+    alphas = [0.5, 0.3, 0.6, 0.8]
     firm_policies = [f"SAC_initial_firm4_alpha{alphas[i]}" for i in range(K)] 
     output_data = []
+    demand_type = "price_based"
     
     while True:
         if experiment == "first_firm_constant":
@@ -32,20 +33,21 @@ def in_loop_retraining(experiment = "first_firm_constant", firm_count=4, episode
             "model.name": ["sac"],
             "simulator.city": "nyc_brooklyn",
             "model.cplexpath": None,
-            "model.test_episodes": episodes_before_retrain,
+            "model.test_episodes": 1, #episodes_before_retrain,
             "model.checkpoint_path": firm_policies,
             "model.alpha": alphas, # I think we should move this to simulator.alphas
             "simulator.reuse_no_control": False,
             "simulator.firm_count": firm_count,
             "simulator.agents_know_partial_demand": True,
             "simulator.constant_vehicle_count": True,
-            "simulator.demand_filter_type": "price_based" ,
+            "simulator.demand_filter_type": demand_type,
             "simulator.pricing_model": "cournot",
             "simulator.initial_vehicle_distribution": "equal",
             "model.loop_number": retrain_count,
             "simulator.competition": True     # this is a new thing i added for competition, this is what toggled the multi in test_approach
         }
         data = testing.multi_test(config)
+        demand_type = "predetermined"  # after first loop, use predetermined demand for all firms
         # test_results, data_files = testing.test_approach(cfg, env, parser, device, loop_number=retrain_count, name="sac")
 
         output_data.append(data)
@@ -68,7 +70,7 @@ def in_loop_retraining(experiment = "first_firm_constant", firm_count=4, episode
                 "simulator.demand": f"historical_demand_sac_firm_{k}_{retrain_count}",
                 "model.cplexpath": None,
                 "model.checkpoint_path": firm_policies[k],  # Save new model to new file
-                "model.max_episodes": 200, # Was 50
+                "model.max_episodes": 500, # Was 50
                 "model.wandb": False,
                 "simulator.reuse_no_control": False,
                 "simulator.firm_count": 1,
@@ -150,7 +152,9 @@ def replot(filename):
     plt.title('Overall Profit vs Retrain Iteration for Each Firm')
 
     plt.show()
+    stop = True
 
 
 if __name__ == "__main__":
     in_loop_retraining(experiment="first_firm_constant", firm_count=4, episodes_before_retrain=50, max_retrain=100)
+    # replot("saved_files/competition_loop_data_4_firms_49_retrain_20251007_102101.pkl")

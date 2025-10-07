@@ -47,7 +47,7 @@ def setup_macro(cfg):
     demand_ratio=calibrated_params[city]["demand_ratio"],
     json_hr=calibrated_params[city]["json_hr"],
     sd=cfg.seed,
-    json_tstep=cfg.json_tsetp,
+    json_tstep=calibrated_params[city]["test_tstep"],
     tf=cfg.max_steps,
     pricing_model=cfg.pricing_model
     )

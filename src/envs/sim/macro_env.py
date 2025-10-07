@@ -60,7 +60,7 @@ class AMoD:
             total_vehicles += self.G.nodes[n]['accInit'] 
         self.total_vehicles = total_vehicles
         self.alpha = cfg.alpha # sensitivity parameter for price computation
-        self.pricing_model = "equal"
+        self.pricing_model = cfg.pricing_model
         self.beta = beta * scenario.tstep
         t = self.time
         self.servedDemand = defaultdict(dict)
@@ -174,7 +174,7 @@ class AMoD:
     def get_cournot_price(self, i, j, t):
         num_vehs_i = self.acc[i][t]  # total supply at time t+1 # CHECK
         a = self.price[i,j][t]
-        b = self.alpha * a * (1 / (self.total_vehicles/ self.N))
+        b = self.alpha * a * (1 / (self.total_vehicles/ 4))
         # b = 0 # TEMPORARY, CHANGE LATER
         cournot_price = max(a/2, a - b * num_vehs_i)
         # print(supply, q_total, p) # or current planned quantity
@@ -536,7 +536,8 @@ class Scenario:
             for t in range(0,self.tf*2):
                 for i,j in self.edges:                
                     if (i,j) in self.demand_input and t  in self.demand_input[i,j]:
-                        demand[i,j][t] = np.random.poisson(self.demand_input[i,j][t])
+                        # demand[i,j][t] = np.random.poisson(self.demand_input[i,j][t])
+                        demand[i,j][t] = self.demand_input[i,j][t]
                         price[i,j][t] = self.p[i,j][t]
                     else:
                         demand[i,j][t] = 0

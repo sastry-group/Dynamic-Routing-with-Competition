@@ -152,8 +152,8 @@ def multi_test(input_config):
     for Colab tutorial
     '''
     # We always need a control!
-    if "no_rebalancing" not in input_config["model.name"]:
-        input_config["model.name"].append("no_rebalancing")
+    # if "no_rebalancing" not in input_config["model.name"]:
+    #     input_config["model.name"].append("no_rebalancing")
     multi_config = [{**copy.deepcopy(input_config), "model.name" : model} for model in input_config["model.name"]]
 
     data = [{}, {}, {}]
@@ -316,7 +316,8 @@ def test_approach(cfg, env, parser, device, loop_number=0, name=""):
     episode_inflows = [[] for _ in range(K)]
     # rl_means = [[] for _ in range(K)]
     # inflows = [[] for _ in range(K)]
-    seeds = list(range(env.cfg.seed, env.cfg.seed + test_episodes+1))
+    # seeds = list(range(env.cfg.seed, env.cfg.seed + test_episodes+1))
+    seeds = [env.cfg.seed] * test_episodes
     historical_demand_totals = [defaultdict(lambda: defaultdict(float)) for _ in range(K)]
     historical_price_totals = [defaultdict(lambda: defaultdict(float)) for _ in range(K)]
 
@@ -399,7 +400,7 @@ def test_approach(cfg, env, parser, device, loop_number=0, name=""):
     for k, f in enumerate(fleets):
         for (i,j), t_dict in historical_prices[k].items():
             for t, p in t_dict.items():
-                historical_prices[k][(i,j)][t] = p / test_episodes
+                historical_prices[k][(i,j)][t] = p / test_episodes / env.cfg.demand_ratio
     # print("Average historical prices per episode:", historical_prices)
 
     json_file = f"src/envs/data/multi_macro/scenario_{cfg.simulator.city}.json"
@@ -453,7 +454,7 @@ def convert(data, sim, json_start=0, json_tstep=1, extra_data=None, demand_ratio
                     "origin": i,
                     "destination": j,
                     "demand": inner_demand[time_stamp],
-                    "travel_time": sim.travelTime[(i,j)][time_stamp],
+                    "travel_time": sim.travelTime[(i,j)][time_stamp] * json_tstep,
                     # "price": inner_prices[time_stamp]
                     "price": default_prices[time_stamp]
                 })

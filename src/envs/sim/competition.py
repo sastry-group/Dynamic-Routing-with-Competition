@@ -108,7 +108,7 @@ class CompetitionSim:
         # print(f"Initial demand: {self.demand}")
         self.G = scenario.G
         self.edges = []
-        self.beta = 0.01 # sensitivity parameter for price computation
+        self.beta = 0.1 # sensitivity parameter for price computation
         for i in self.G:
             self.edges.append((i,i))
             for e in self.G.out_edges(i):
@@ -295,6 +295,28 @@ class CompetitionSim:
         #         numer = math.exp(-self.beta * prices[k][i,j])
         #         demand_per_firm[k][(i, j)] = D * (numer / denom)
         for (i, j), D in demand_global_t.items():
+            if D <= 0:
+                continue
+            weights = [math.exp(-self.beta * prices[k][i, j]) for k in range(K)]
+            denom = sum(weights)
+            probs = [w / denom for w in weights]
+            counts = D * np.array(probs)
+
+            n = np.floor(counts).astype(int)
+            remainder = int(D - n.sum())        # units left to place (>= 0)
+
+            if remainder > 0:
+                frac = counts - n
+                # give +1 to the remainder largest fractional parts
+                take = np.argsort(-frac)[:remainder]
+                n[take] += 1
+
+            for k in range(K):
+                demand_per_firm[k][(i, j)] = n[k]
+
+        return demand_per_firm
+
+        for (i, j), D in demand_global_t.items():
             # D = data.get(time, 0.0)
             weights = [math.exp(-self.beta * prices[k][i, j]) for k in range(K)]
             denom = sum(weights)
@@ -323,7 +345,8 @@ class CompetitionSim:
                     continue
                 base_price = self.price[i,j].get(self.time, 0.0)
                 # NOTE!: if you dont want the global supply for cournot don't pass self.fleets
-                price_t[i,j] = f.compute_price(i, j, self.time, base_price, pricing_model=f.pricing_model, global_fleets_info=self.fleets)
+                price_t[i,j] = f.compute_price(i, j, self.time, base_price, global_fleets_info=None)
+                # price_t[i,j] = f.compute_price(i, j, self.time, base_price, pricing_model=f.pricing_model, global_fleets_info=self.fleets)
             fleet_prices.append(price_t)
             f.price = price_t
         return fleet_prices
