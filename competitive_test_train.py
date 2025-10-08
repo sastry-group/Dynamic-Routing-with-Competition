@@ -5,6 +5,7 @@ import warnings
 warnings.filterwarnings("ignore")
 importlib.reload(testing)
 import random
+import csv
 
 import sys
 if 'testing' in sys.modules:
@@ -14,6 +15,11 @@ if 'testing' in sys.modules:
 def in_loop_retraining(experiment = "first_firm_constant", firm_count=4, episodes_before_retrain=7, max_retrain=100):
     retrain_count = 0
     K = firm_count
+    start_time = now.strftime("%Y%m%d_%H%M%S")
+    competition_loop_data_filename = f"saved_files/competition_loop_data_{firm_count}_firms_{max_retrain}_retrain_{start_time}.csv"
+    with open(competition_loop_data_filename, 'w', newline='') as csvfile:
+        csv_writer = csv.writer(csvfile)
+        csv_writer.writerows(["Retraining Loop", "Firm 1 Profit", "Firm 2 Profit", "Firm 3 Profit", "Firm 4 Profit"])
 
      # Initial policies for each firm
     # alphas = [random.uniform(sys.float_info.epsilon, 1 - sys.float_info.epsilon) for _ in range(K)]
@@ -25,6 +31,8 @@ def in_loop_retraining(experiment = "first_firm_constant", firm_count=4, episode
     while True:
         if experiment == "first_firm_constant":
             firm_policies[0] = f"SAC_initial_firm4_alpha{alphas[0]}"
+        elif experiment == "only_first_firm_trains":
+            firm_policies[1:4] = [f"SAC_initial_firm4_alpha{alphas[i]}" for i in range(1,4)]
 
         # Test the model for episodes_before_retrain episodes
         config = {
@@ -51,6 +59,10 @@ def in_loop_retraining(experiment = "first_firm_constant", firm_count=4, episode
         # test_results, data_files = testing.test_approach(cfg, env, parser, device, loop_number=retrain_count, name="sac")
 
         output_data.append(data)
+
+        with open(competition_loop_data_filename, 'a', newline='') as csvfile:
+            csv_writer = csv.writer(csvfile)
+            csv_writer.writerow([retrain_count] + [data[0]["sac"][k][0] for k in range(K)])
         print(f"Profits after retrain {retrain_count}: ", [data[0]["sac"][k][0] for k in range(K)])
         if retrain_count >= max_retrain:
             print("Reached maximum retrain count. Ending loop.")
@@ -62,6 +74,9 @@ def in_loop_retraining(experiment = "first_firm_constant", firm_count=4, episode
             if experiment == "first_firm_constant":
                 if k == 0:
                     continue  # Don't retrain the first firm
+            elif experiment == "only_first_firm_trains":
+                if k != 0:
+                    continue  # Only retrain the first firm
             # Train a model based on new historical demand
             config = {
                 "simulator.name": "macro",
@@ -70,7 +85,7 @@ def in_loop_retraining(experiment = "first_firm_constant", firm_count=4, episode
                 "simulator.demand": f"historical_demand_sac_firm_{k}_{retrain_count}",
                 "model.cplexpath": None,
                 "model.checkpoint_path": firm_policies[k],  # Save new model to new file
-                "model.max_episodes": 500, # Was 50
+                "model.max_episodes": 100, # Was 50
                 "model.wandb": False,
                 "simulator.reuse_no_control": False,
                 "simulator.firm_count": 1,
@@ -156,5 +171,6 @@ def replot(filename):
 
 
 if __name__ == "__main__":
-    in_loop_retraining(experiment="first_firm_constant", firm_count=4, episodes_before_retrain=50, max_retrain=100)
+    # in_loop_retraining(experiment="first_firm_constant", firm_count=4, episodes_before_retrain=50, max_retrain=100)
+    in_loop_retraining(experiment="only_first_firm_trains", firm_count=4, episodes_before_retrain=50, max_retrain=100)
     # replot("saved_files/competition_loop_data_4_firms_49_retrain_20251007_102101.pkl")
