@@ -6,6 +6,8 @@ warnings.filterwarnings("ignore")
 importlib.reload(testing)
 import random
 import csv
+import pickle
+from datetime import datetime
 
 import sys
 if 'testing' in sys.modules:
@@ -15,6 +17,7 @@ if 'testing' in sys.modules:
 def in_loop_retraining(experiment = "first_firm_constant", firm_count=4, episodes_before_retrain=7, max_retrain=100):
     retrain_count = 0
     K = firm_count
+    now = datetime.now()
     start_time = now.strftime("%Y%m%d_%H%M%S")
     competition_loop_data_filename = f"saved_files/competition_loop_data_{firm_count}_firms_{max_retrain}_retrain_{start_time}.csv"
     with open(competition_loop_data_filename, 'w', newline='') as csvfile:
@@ -33,13 +36,16 @@ def in_loop_retraining(experiment = "first_firm_constant", firm_count=4, episode
             firm_policies[0] = f"SAC_initial_firm4_alpha{alphas[0]}"
         elif experiment == "only_first_firm_trains":
             firm_policies[1:4] = [f"SAC_initial_firm4_alpha{alphas[i]}" for i in range(1,4)]
+            # firm_policies[0] = f"SAC_portion_4_firm_0_loop_1"
 
         # Test the model for episodes_before_retrain episodes
         config = {
             "simulator.name": "multi_macro",
             # "model.name": ["sac", "equal_distribution", "random"],
             "model.name": ["sac"],
-            "simulator.city": "nyc_brooklyn",
+            "simulator.city": "san_francisco",
+            "simulator.demand": "san_francisco",
+            # "simulator.city": "nyc_brooklyn",
             "model.cplexpath": None,
             "model.test_episodes": 1, #episodes_before_retrain,
             "model.checkpoint_path": firm_policies,
@@ -81,12 +87,13 @@ def in_loop_retraining(experiment = "first_firm_constant", firm_count=4, episode
             config = {
                 "simulator.name": "macro",
                 "model.name": "sac",
-                "simulator.city": "nyc_brooklyn",
+                "simulator.city": "san_francisco",
+                # "simulator.city": "nyc_brooklyn",
                 "simulator.demand": f"historical_demand_sac_firm_{k}_{retrain_count}",
                 "model.cplexpath": None,
                 "model.checkpoint_path": firm_policies[k],  # Save new model to new file
-                "model.max_episodes": 100, # Was 50
-                "model.wandb": False,
+                "model.max_episodes": 10000, # Was 50
+                "model.wandb": True,
                 "simulator.reuse_no_control": False,
                 "simulator.firm_count": 1,
                 "simulator.agents_know_partial_demand": True,
@@ -101,10 +108,6 @@ def in_loop_retraining(experiment = "first_firm_constant", firm_count=4, episode
         print(f"Profits after retrain {retrain_count}: ", [data[0]["sac"][k][0] for k in range(K)])
         retrain_count += 1
 
-    # Dump data
-    import pickle
-    from datetime import datetime
-    now = datetime.now()
 
     # Format for filename
     filename_time = now.strftime("%Y%m%d_%H%M%S")

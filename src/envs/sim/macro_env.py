@@ -175,7 +175,7 @@ class AMoD:
         num_vehs_i = self.acc[i][t]  # total supply at time t+1 # CHECK
         a = self.price[i,j][t]
         b = self.alpha * a * (1 / (self.total_vehicles/ 4))
-        # b = 0 # TEMPORARY, CHANGE LATER
+        b = 0 # TEMPORARY, CHANGE LATER
         cournot_price = max(a/2, a - b * num_vehs_i)
         # print(supply, q_total, p) # or current planned quantity
         # print(f"Cournot price for edge ({i},{j}) at time {t}: {cournot_price}, and p,q: {p}, {q_total}")

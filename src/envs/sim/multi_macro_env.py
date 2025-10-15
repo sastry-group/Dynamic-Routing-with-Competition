@@ -413,6 +413,7 @@ class AMoD:
             a = base_price 
             alpha = 0.1
             b = alpha * a * (1 / total_supply)
+            b = 0 # TEMPORARY, CHANGE LATER
             cournot_price = a - b * total_supply
             # print(supply, q_total, p) # or current planned quantity
             # print(f"Cournot price for edge ({i},{j}) at time {t}: {cournot_price}, and p,q: {p}, {q_total}")
@@ -547,7 +548,7 @@ class Fleet:
             a = price
             b = self.alpha * a * (1 / (self.max_supply/4)) # more aggressive pricing
             # b = self.alpha * a * (1 / (self.max_supply))
-            # b = 0 # TEMPORARY, CHANGE LATER
+            b = 0 # TEMPORARY, CHANGE LATER
             cournot_price = max(price/2, a - b * num_vehs_i)
             # print(supply, q_total, p) # or current planned quantity
             # print(f"Cournot price for edge ({i},{j}) at time {t}: {cournot_price}, and p,q: {p}, {q_total}")
