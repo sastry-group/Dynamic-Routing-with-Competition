@@ -69,6 +69,23 @@ class AMoD:
         self.reward = 0
         # observation: current vehicle distribution, time, future arrivals, demand        
         self.obs = (self.acc, self.time, self.dacc, self.demand)
+
+        # Determining pricing model parameters
+        self.price_param = self.cfg.alpha / sum([self.acc[n][0] for n in self.region])
+
+    def get_price(self, i,j,t, expected_availability=None):
+        if self.cfg.pricing_model == 'fixed':
+            return self.price[i,j][t] if (i,j) in self.price and t in self.price[i,j] else 0
+        elif self.cfg.pricing_model == 'quasi_cournot':
+            base_price = self.price[i,j][t] if (i,j) in self.price and t in self.price[i,j] else 0
+            if expected_availability is None:
+                num_vehicles = self.acc[i][t]
+            else:
+                num_vehicles = expected_availability
+            price = max(base_price - self.price_param * base_price * num_vehicles, base_price/2)
+            return price
+        else:
+            raise Exception("Pricing model not recognized.")
     
     def matching(self, CPLEXPATH=None, PATH='', platform = 'linux'):
         #CPLEXPATH = 'None'
@@ -76,7 +93,7 @@ class AMoD:
             return self.matching_pulp()
         else:
             t = self.time
-            demandAttr = [(i,j,self.demand[i,j][t], self.price[i,j][t]) for i,j in self.demand \
+            demandAttr = [(i,j,self.demand[i,j][t], self.get_price(i,j,t)) for i,j in self.demand \
                         if t in self.demand[i,j] and self.demand[i,j][t]>1e-3]
             accTuple = [(n,self.acc[n][t+1]) for n in self.acc]
 
@@ -124,7 +141,7 @@ class AMoD:
 
         demand = {(i, j): self.demand[i,j][t] for i,j in self.demand if t in self.demand[i,j] and self.demand[i,j][t]>1e-3}
 
-        price = {(i, j): self.price[i,j][t] for i,j in self.price if t in self.demand[i,j] and self.demand[i,j][t]>1e-3}
+        price = {(i, j): self.get_price(i,j,t) for i,j in self.price if t in self.demand[i,j] and self.demand[i,j][t]>1e-3}
         
         demand_edges = [(i, j) for i,j in self.demand if t in self.demand[i,j] and self.demand[i,j][t]>1e-3]
 
@@ -191,11 +208,11 @@ class AMoD:
             self.acc[i][t+1] -= self.paxAction[k]
             self.info['served_demand'] += self.servedDemand[i,j][t]            
             self.dacc[j][t+self.demandTime[i,j][t]] += self.paxFlow[i,j][t+self.demandTime[i,j][t]]
-            self.reward += self.paxAction[k]*(self.price[i,j][t] - self.demandTime[i,j][t]*self.beta)  
-            test_rew += self.paxAction[k]*(self.price[i,j][t]) 
+            self.reward += self.paxAction[k]*(self.get_price(i,j,t) - self.demandTime[i,j][t]*self.beta)  
+            test_rew += self.paxAction[k]*(self.get_price(i,j,t)) 
 
-            self.info['revenue'] += self.paxAction[k]*(self.price[i,j][t])  
-            self.info['profit'] += self.paxAction[k]*(self.price[i,j][t] - self.demandTime[i,j][t]*self.beta) 
+            self.info['revenue'] += self.paxAction[k]*(self.get_price(i,j,t))  
+            self.info['profit'] += self.paxAction[k]*(self.get_price(i,j,t) - self.demandTime[i,j][t]*self.beta) 
 
         self.obs = (self.acc, self.time, self.dacc, self.demand) # for acc, the time index would be t+1, but for demand, the time index would be t
         done = False # if passenger matching is executed first
@@ -567,16 +584,28 @@ class GNNParser():
                 self.data = json.load(file)
         
     def parse_obs(self, obs):
-        x = torch.cat((
-            torch.tensor([obs[0][n][self.env.time+1]*self.s for n in self.env.region]).view(1, 1, self.env.nregion).float(), 
+        if self.env.cfg.observation_model == "include_adjusted_revenue":
+            x = torch.cat((
+                torch.tensor([obs[0][n][self.env.time+1]*self.s for n in self.env.region]).view(1, 1, self.env.nregion).float(), 
 
-            torch.tensor([[(obs[0][n][self.env.time+1] + self.env.dacc[n][t])*self.s for n in self.env.region] \
-                          for t in range(self.env.time+1, self.env.time+self.T+1)]).view(1, self.T, self.env.nregion).float(), 
+                torch.tensor([[(obs[0][n][self.env.time+1] + self.env.dacc[n][t])*self.s for n in self.env.region] \
+                            for t in range(self.env.time+1, self.env.time+self.T+1)]).view(1, self.T, self.env.nregion).float(), 
 
-            torch.tensor([[sum([(self.env.scenario.demand_input[i,j][t])*(self.env.price[i,j][t])*self.s \
-                          for j in self.env.region]) for i in self.env.region] for t in range(self.env.time+1, self.env.time+self.T+1)]).view(1, self.T, self.env.nregion).float()),
-                          
-              dim=1).squeeze(0).view(1+self.T +self.T , self.env.nregion).T
+                torch.tensor([[sum([(self.env.scenario.demand_input[i,j][t])*(self.env.get_price(i,j,t,obs[0][i][self.env.time+1]+self.env.dacc[i][t]))*self.s \
+                            for j in self.env.region]) for i in self.env.region] for t in range(self.env.time+1, self.env.time+self.T+1)]).view(1, self.T, self.env.nregion).float()),
+                            
+                dim=1).squeeze(0).view(1+self.T +self.T , self.env.nregion).T
+        else:
+            x = torch.cat((
+                torch.tensor([obs[0][n][self.env.time+1]*self.s for n in self.env.region]).view(1, 1, self.env.nregion).float(), 
+
+                torch.tensor([[(obs[0][n][self.env.time+1] + self.env.dacc[n][t])*self.s for n in self.env.region] \
+                            for t in range(self.env.time+1, self.env.time+self.T+1)]).view(1, self.T, self.env.nregion).float(), 
+
+                torch.tensor([[sum([(self.env.scenario.demand_input[i,j][t])*(self.env.price[i,j][t])*self.s \
+                            for j in self.env.region]) for i in self.env.region] for t in range(self.env.time+1, self.env.time+self.T+1)]).view(1, self.T, self.env.nregion).float()),
+                            
+                dim=1).squeeze(0).view(1+self.T +self.T , self.env.nregion).T
         
         if self.json_file is not None:
             edge_index = torch.vstack((torch.tensor([edge['i'] for edge in self.data["topology_graph"]]).view(1,-1), 

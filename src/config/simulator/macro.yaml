@@ -19,3 +19,9 @@ time_horizon: 6  # Steps in the future for demand and arriving vehicle forecast 
 cplexpath: "/opt/opl/bin/x86-64_linux/"  # Defines directory of the CPLEX installation
   
 directory: ""  # Defines directory where to save files
+
+pricing_model: "fixed"  # Defines pricing model (default: fixed). Options: "fixed", "quasi_cournot"
+
+alpha: 0.0  # Defines parameter alpha for quasi-cournot pricing model (default: 0.0)
+
+observation_model: "default"  # Defines observation model (default: default). Options: "default", "include_adjusted_revenue"
