@@ -118,7 +118,7 @@ def test(config):
     inflows = np.mean(inflows, axis=0)
     
     #check if no_control performance is saved
-    path = f'./src/envs/data/{cfg.simulator.name}/{cfg.simulator.city}_no_control_performance.json'
+    path = f'./src/envs/data/{cfg.simulator.name}/{cfg.simulator.city}_quasi_cournot_aggressive_price_no_control_performance.json'
     #check if path exists
     if os.path.exists(path):
         with open(path, 'r') as f:
@@ -130,8 +130,8 @@ def test(config):
         print('No control performance not found. Calculating (this happens only the first time on a new environment)...')
         cfg_copy = cfg.copy()
         cfg_copy.model.name = 'no_rebalancing'
-        model = setup_model(cfg, env, parser, device)
-        no_reb_reward, no_reb_demand, no_reb_cost, _ = model.test(10, env)
+        model = setup_model(cfg_copy, env, parser, device)
+        no_reb_reward, no_reb_demand, no_reb_cost, _ = model.test(100, env)
         no_reb_reward = round(np.mean(no_reb_reward)/1000,2)
         no_reb_demand = round(np.mean(no_reb_demand)/1000,2)
         no_reb_cost = round(np.mean(no_reb_cost)/1000,2)

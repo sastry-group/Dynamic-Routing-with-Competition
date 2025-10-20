@@ -1,0 +1,14 @@
+from train import train
+config = {
+    "simulator.name": "macro",
+    "model.name": "sac",
+    "simulator.city": "san_francisco",
+    "model.cplexpath": None, 
+    "simulator.pricing_model": "fixed",
+    # "simulator.alpha": 0.3*14/4,
+    # "simulator.observation_model": "include_adjusted_revenue",
+    "model.checkpoint_path": "SAC_SF_fixed_price",
+    "model.max_episodes": 4000,
+    "model.wandb": True,
+}
+train(config)
