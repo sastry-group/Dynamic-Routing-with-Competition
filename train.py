@@ -91,8 +91,8 @@ def setup_multi_macro(cfg):
         firm_count=cfg.firm_count,
         demand_filter_type = cfg.demand_filter_type,
         initial_vehicle_distribution= cfg.initial_vehicle_distribution,
-        pricing_model= cfg.pricing_model,
-        alpha_pricing = cfg.alpha
+        pricing_model= cfg.pricing_model
+        # alpha_pricing = cfg.alpha
     )
     env = AMoD(scenario, cfg = cfg, beta = calibrated_params[city]["beta"])
     parser = GNNParser(env, T=cfg.time_horizon, json_file=f"src/envs/data/multi_macro/scenario_{city}.json")
@@ -170,8 +170,13 @@ def train(config):
     for colab tutorial
     """
 
-    with initialize(config_path="src/config"):
-        cfg = compose(config_name="config", overrides= [f"{key}={value}" for key, value in config.items()])  # Load the configuration
+    # with initialize(config_path="src/config"):
+    #     cfg = compose(config_name="config", overrides= [f"{key}={value}" for key, value in config.items()])  # Load the configuration
+
+    with initialize(version_base=None, config_path="src/config"):
+        cfg = compose(config_name="config",
+                    overrides=[f"{k}={v}" for k, v in config.items()])
+
 
     if cfg.simulator.name == "sumo":
         env, parser = setup_sumo(cfg)
@@ -202,7 +207,7 @@ def train(config):
     if cfg.model.wandb: 
         import wandb
         wandb_config = {k: v for k, v in cfg.model.items()}
-        run = wandb.init(
+        run = wandb.run or wandb.init(
             project=cfg.model.get("project", "default-project"),
             entity=cfg.model.get("entity", None),
             name=cfg.model.get("run_name", None),
@@ -258,12 +263,18 @@ def main(cfg: DictConfig):
     if cfg.model.wandb: 
         import wandb
         wandb_config = {k: v for k, v in cfg.model.items()}
-        run = wandb.init(
+        # run = wandb.init(
+        #     project=cfg.model.get("project", "default-project"),
+        #     entity=cfg.model.get("entity", None),
+        #     name=cfg.model.get("run_name", None),
+
+        # )
+        run = wandb.run or wandb.init(
             project=cfg.model.get("project", "default-project"),
             entity=cfg.model.get("entity", None),
             name=cfg.model.get("run_name", None),
-            config=wandb_config,
         )
+
         model.wandb = run
 
     if hasattr(cfg.model, "data_path"): 

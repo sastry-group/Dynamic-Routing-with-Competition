@@ -1,0 +1,29 @@
+name: sac-sweep
+method: grid  # or "random" or "bayes", if we use a metric then bayes
+program: train_sweep.py
+# metric:
+#   name: Reward
+#   goal: maximize
+# metric:
+#   name: Rebalancing Cost
+#   goal: minimize
+
+parameters:
+  model.wandb: 
+    value: true
+  simulator.name:
+    value: multi_macro
+  simulator.city:
+    value: san_francisco
+  simulator.demand:
+    value: san_francisco
+
+  model.alpha:
+    values: [0.01, 0.05, 0.3, 0.5, 0.6, 0.8]
+  model.batch_size:
+    values: [64, 100, 128, 256]
+  model.hidden_size:
+    values: [128, 256, 512]
+  model.rew_scale:
+    values: [0.001, 0.003, 0.01, 0.05]
+  

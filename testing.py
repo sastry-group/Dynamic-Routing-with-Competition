@@ -201,12 +201,13 @@ def multi_test(input_config):
     # no_ctrl_device = device = torch.device("cuda" if use_cuda else "cpu")
     # control_data = get_no_control_performance(cfg, no_ctrl_env, no_ctrl_parser, no_ctrl_device, use_saved_data=cfg.simulator.reuse_no_control)
 
-    # if cfg.simulator.competition:
-    # plot_multi_fleet_comparison(cfg, env, data)
-    # else: 
-    #     control_data = get_no_control_performance(cfg, env, parser, device, use_saved_data=cfg.simulator.reuse_no_control)
+    if cfg.simulator.competition:
+        # plot_multi_fleet_comparison(cfg, env, data)
+        pass
+    else: 
+        control_data = get_no_control_performance(cfg, env, parser, device, use_saved_data=cfg.simulator.reuse_no_control)
 
-    #     plot_comparison(cfg, env, control_data, data)
+        plot_comparison(cfg, env, control_data, data)
 
 
     return data
@@ -611,7 +612,7 @@ def plot_comparison(cfg, env, control_data, comparison_data):
                         textcoords="offset points",
                         ha='center', va='bottom')
 
-    profit_data, inflows = comparison_data
+    profit_data, inflows = comparison_data[0], comparison_data[1]
     labels = ['Overall Profit', 'Served Demand Profit', 'Rebalancing Cost']
     x = np.arange(len(labels))  # the label locations
     width = 0.15  # the width of the bars
@@ -624,7 +625,7 @@ def plot_comparison(cfg, env, control_data, comparison_data):
     colors = sns.color_palette("hsv", len(profit_data) + 1)
     start_x = x - (num_bars-1)*width/2 
     for ind, (key, data) in enumerate(profit_data.items()):
-        rects1 = ax1.bar(start_x + ind*width, data, width, label=key, color=colors[ind])
+        rects1 = ax1.bar(start_x + ind*width, data[0], width, label=key, color=colors[ind])
         add_value_labels(rects1) # Adding value labels to each bar
     rects2 = ax1.bar(start_x + (ind+1)*width, control_data, width, label='No Control', color=colors[-1])
     add_value_labels(rects2)

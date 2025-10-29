@@ -232,7 +232,7 @@ class AMoD:
             self.paxFlow[i,j][t+self.demandTime[i,j][t]] = self.paxAction[k] # vehicles with passengers flowing region i to region j considering the arrival time
             self.info["operating_cost"] += self.demandTime[i,j][t]*self.beta*self.paxAction[k] # Calculate operating cost
             self.acc[i][t+1] -= self.paxAction[k] # How many vehicles are left in region i at time t+1
-            print(self.acc, self.paxAction)
+            # print(self.acc, self.paxAction)
             self.info['served_demand'] += self.servedDemand[i,j][t] # How much demand is served in this time step            
             self.dacc[j][t+self.demandTime[i,j][t]] += self.paxFlow[i,j][t+self.demandTime[i,j][t]] # Adding in passenger vehicles to those arriving in region j at time t+self.demandTime[i,j][t]
             self.reward += self.paxAction[k]*(self.price[i,j][t] - self.demandTime[i,j][t]*self.beta)  # reward is price - operating cost (I'm guessing price is what the passengers pay?)

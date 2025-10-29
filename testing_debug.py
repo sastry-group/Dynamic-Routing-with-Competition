@@ -50,19 +50,20 @@ importlib.reload(testing)
 config = {
     "simulator.name": "multi_macro",
     "model.name": ["sac", "equal_distribution", "random"],
-    "simulator.city": "nyc_brooklyn", 
+    "simulator.city": "san_francisco", 
+    "simulator.demand": "san_francisco",
     "model.cplexpath": None, 
     "model.test_episodes": 10,
-    "model.checkpoint_path": "SAC_initial_firm4_alpha0.8",
+    "model.checkpoint_path": "SAC_testNOM_firm1_SF",
     "simulator.reuse_no_control": True,
-    "simulator.firm_count": 4,
+    "simulator.firm_count": 1,
     "simulator.agents_know_partial_demand": False,
     "simulator.alpha": 0.8,
     "model.loop_number": 0,
     "simulator.competition": False,
     "simulator.constant_vehicle_count": True,
     "simulator.demand_filter_type": "flow" ,
-    "simulator.pricing_model": "cournot"
+    "simulator.pricing_model": "exogenous"
 
     }
 
