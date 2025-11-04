@@ -108,7 +108,7 @@ def test(config):
     
     model = setup_model(cfg, env, parser, device)
     
-    print(f'Testing model {cfg.model.name} on {cfg.simulator.name} environment')
+    print(f'Testing model {cfg.model.name}, version {cfg.model.checkpoint_path} on {cfg.simulator.name} environment')
     episode_reward, episode_served_demand, episode_rebalancing_cost, inflows = model.test(cfg.model.test_episodes, env)
 
     print('Mean Episode Profit ($): ', np.mean(episode_reward))

@@ -287,13 +287,17 @@ class SAC(nn.Module):
 
         return loss_q1, loss_q2
 
-    def compute_loss_pi(self, data):
+    def compute_loss_pi(self, data, log=False):
         state_batch, edge_index = (
             data.x_s,
             data.edge_index_s,
         )
 
-        actions, logp_a = self.actor(state_batch, edge_index)
+        if log:
+            actions, logp_a, log_dict = self.actor(state_batch, edge_index, log=log)
+            print("Mean Entropy:", log_dict["mean_entropy"].item())
+        else:
+            actions, logp_a = self.actor(state_batch, edge_index)
         q1_1 = self.critic1(state_batch, edge_index, actions)
         q2_a = self.critic2(state_batch, edge_index, actions)
         q_a = torch.min(q1_1, q2_a)
@@ -310,7 +314,7 @@ class SAC(nn.Module):
         loss_pi = (self.alpha * logp_a - q_a).mean()
         return loss_pi
 
-    def update(self, data, conservative=False, only_q=False):
+    def update(self, data, conservative=False, only_q=False, log=False):
         loss_q1, loss_q2 = self.compute_loss_q(data, conservative)
 
         self.optimizers["c1_optimizer"].zero_grad()
@@ -348,7 +352,7 @@ class SAC(nn.Module):
 
             # one gradient descent step for policy network
             self.optimizers["a_optimizer"].zero_grad()
-            loss_pi = self.compute_loss_pi(data)
+            loss_pi = self.compute_loss_pi(data, log=log)
             loss_pi.backward(retain_graph=False)
             nn.utils.clip_grad_norm_(self.actor.parameters(), 10)
             self.optimizers["a_optimizer"].step()
@@ -522,10 +526,14 @@ class SAC(nn.Module):
                     obs = new_obs
                     if i_episode > 10:
                         batch = self.replay_buffer.sample_batch(cfg.model.batch_size)
-                        if i_episode < cfg.model.only_q_steps:
-                            self.update(data=batch, only_q=True)
+                        if i_episode % 1 == 0:
+                            log = True
                         else:
-                            self.update(data=batch)
+                            log = False
+                        if i_episode < cfg.model.only_q_steps:
+                            self.update(data=batch, only_q=True, log=log)
+                        else:
+                            self.update(data=batch, log=log)
                 epochs.set_description(
                     f"Episode {i_episode+1} | Reward: {episode_reward:.2f} | ServedDemand: {episode_served_demand:.2f} | Reb. Cost: {episode_rebalancing_cost:.2f}"
                 )

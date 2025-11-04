@@ -1,3 +1,4 @@
+import torch
 from torch import nn
 import torch.nn.functional as F
 from torch.distributions import Dirichlet
@@ -16,8 +17,11 @@ class GNNActor(nn.Module):
         self.lin1 = nn.Linear(in_channels, hidden_size)
         self.lin2 = nn.Linear(hidden_size, hidden_size)
         self.lin3 = nn.Linear(hidden_size, 1)
+        with torch.no_grad():
+            self.lin3.bias.fill_(0.54132485)
+            nn.init.normal_(self.lin3.weight, mean=0.0, std=1e-3)
 
-    def forward(self, state, edge_index, deterministic=False, return_dist=False):
+    def forward(self, state, edge_index, deterministic=False, return_dist=False, log=False):
         out = F.relu(self.conv1(state, edge_index))
         x = out + state
         x = x.reshape(-1, self.act_dim, self.in_channels)
@@ -34,6 +38,11 @@ class GNNActor(nn.Module):
             m = Dirichlet(concentration + 1e-20)
             action = m.rsample()
             log_prob = m.log_prob(action)
+        if log:
+            log_dict = {
+                "mean_entropy": m.entropy().mean()
+            }
+            return action, log_prob, log_dict
         return action, log_prob
     
 
