@@ -54,7 +54,7 @@ config = {
     "simulator.demand": "san_francisco",
     "model.cplexpath": None, 
     "model.test_episodes": 10,
-    "model.checkpoint_path": "SAC_testNOM_firm1_SF",
+    "model.checkpoint_path": "SAC_san_francisco_a0.8_bs100_h256_rw0.1",
     "simulator.reuse_no_control": True,
     "simulator.firm_count": 1,
     "simulator.agents_know_partial_demand": False,
