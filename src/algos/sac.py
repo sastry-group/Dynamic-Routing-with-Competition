@@ -530,7 +530,9 @@ class SAC(nn.Module):
                             log = True
                         else:
                             log = False
-                        if i_episode < cfg.model.only_q_steps:
+                        # if i_episode < cfg.model.only_q_steps:
+                        if cfg.model.only_q_steps > 0 and i_episode % cfg.model.only_q_steps == 0:
+                            print("q update, episode #: ", i_episode)
                             self.update(data=batch, only_q=True, log=log)
                         else:
                             self.update(data=batch, log=log)
