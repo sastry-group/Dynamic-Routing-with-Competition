@@ -215,6 +215,7 @@ class SAC(nn.Module):
         q1 = self.critic1(state_batch, edge_index, action_batch)
         q2 = self.critic2(state_batch, edge_index, action_batch)
 
+        # print("alpha in sac: ", self.alpha)
         if self.wandb is not None:
             self.wandb.log({"Q1": q1.mean().item()})
         with torch.no_grad():

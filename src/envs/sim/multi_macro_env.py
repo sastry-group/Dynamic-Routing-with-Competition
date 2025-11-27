@@ -545,6 +545,7 @@ class Fleet:
 
             # supply, number of initial vehicles (constant right now)
             a = price
+            # print("alpha in pricing:", self.alpha)
             # b = self.alpha * a * (1 / (self.max_supply/self.nregion))
             b = self.alpha * a * (1 / (self.max_supply)) # Option for a harder setting
             # b = 0 # TEMPORARY, CHANGE LATER

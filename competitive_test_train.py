@@ -11,14 +11,14 @@ if 'testing' in sys.modules:
     del sys.modules['testing']
 
 
-def in_loop_retraining(experiment = "first_firm_constant", firm_count=4, episodes_before_retrain=7, max_retrain=100):
+def in_loop_retraining(experiment = "first_firm_constant", firm_count=2, episodes_before_retrain=7, max_retrain=100):
     retrain_count = 0
     K = firm_count
 
      # Initial policies for each firm
     # alphas = [random.uniform(sys.float_info.epsilon, 1 - sys.float_info.epsilon) for _ in range(K)]
     alphas = [0.7*14/4, 0.7*14/4]
-    firm_policies = [f"SAC_initial_firm2_alpha{alphas[i]}" for i in range(K)] 
+    firm_policies = [f"SAC_nyc_brooklyn_quasi_cournot_aggressive_price_0_7_obs_change_a0.5_bs100_h256_oqs0" for i in range(K)] 
     output_data = []
     
     while True:
@@ -154,4 +154,4 @@ def replot(filename):
 
 
 if __name__ == "__main__":
-    in_loop_retraining(experiment="first_firm_constant", firm_count=4, episodes_before_retrain=100, max_retrain=30)
+    in_loop_retraining(experiment="first_firm_constant", firm_count=2, episodes_before_retrain=100, max_retrain=30)
