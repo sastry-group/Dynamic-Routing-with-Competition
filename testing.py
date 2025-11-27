@@ -112,7 +112,7 @@ def test(config):
     episode_reward, episode_served_demand, episode_rebalancing_cost, inflows = model.test(cfg.model.test_episodes, env)
 
     print('Mean Episode Profit ($): ', np.mean(episode_reward))
-    print('Mean Episode Served Demand- Proit($): ', np.mean(episode_served_demand))
+    print('Mean Episode Served Demand- Profit($): ', np.mean(episode_served_demand))
     print('Mean Episode Rebalancing Cost($): ', np.mean(episode_rebalancing_cost))
 
     inflows = np.mean(inflows, axis=0)
