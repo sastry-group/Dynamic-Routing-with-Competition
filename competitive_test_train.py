@@ -17,13 +17,13 @@ def in_loop_retraining(experiment = "first_firm_constant", firm_count=4, episode
 
      # Initial policies for each firm
     # alphas = [random.uniform(sys.float_info.epsilon, 1 - sys.float_info.epsilon) for _ in range(K)]
-    alphas = [0.3, 0.3, 0.3, 0.3]
-    firm_policies = [f"SAC_initial_firm4_alpha{alphas[i]}" for i in range(K)] 
+    alphas = [0.7*14/4, 0.7*14/4]
+    firm_policies = [f"SAC_initial_firm2_alpha{alphas[i]}" for i in range(K)] 
     output_data = []
     
     while True:
         if experiment == "first_firm_constant":
-            firm_policies[0] = f"SAC_initial_firm4_alpha{alphas[0]}"
+            firm_policies[0] = f"SAC_nyc_brooklyn_quasi_cournot_aggressive_price_0_7_obs_change_a0.5_bs100_h256_oqs0"
 
         # Test the model for episodes_before_retrain episodes
         config = {
@@ -55,7 +55,7 @@ def in_loop_retraining(experiment = "first_firm_constant", firm_count=4, episode
         if retrain_count >= max_retrain:
             break
         # Retrain model for each agent
-        firm_policies = [f"SAC_portion_4_firm_{k}_loop_{retrain_count+1}" for k in range(K)]
+        firm_policies = [f"SAC_2_firm_{k}_loop_{retrain_count+1}" for k in range(K)]
         for k in range(K):
             if experiment == "first_firm_constant":
                 if k == 0:
@@ -66,9 +66,10 @@ def in_loop_retraining(experiment = "first_firm_constant", firm_count=4, episode
                 "model.name": "sac",
                 "simulator.city": "nyc_brooklyn",
                 "simulator.demand": f"historical_demand_sac_firm_{k}_{retrain_count}",
+                "model.alpha": 0.5, 
                 "model.cplexpath": None,
                 "model.checkpoint_path": firm_policies[k],  # Save new model to new file
-                "model.max_episodes": 200, # Was 50
+                "model.max_episodes": 10000, # Was 50
                 "model.wandb": False,
                 "simulator.reuse_no_control": False,
                 "simulator.firm_count": 1,
@@ -153,4 +154,4 @@ def replot(filename):
 
 
 if __name__ == "__main__":
-    in_loop_retraining(experiment="first_firm_constant", firm_count=4, episodes_before_retrain=50, max_retrain=100)
+    in_loop_retraining(experiment="first_firm_constant", firm_count=4, episodes_before_retrain=100, max_retrain=30)
