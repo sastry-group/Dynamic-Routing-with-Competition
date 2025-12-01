@@ -70,7 +70,7 @@ def in_loop_retraining(experiment = "first_firm_constant", firm_count=2, episode
                 "model.cplexpath": None,
                 "model.checkpoint_path": firm_policies[k],  # Save new model to new file
                 "model.max_episodes": 10000, # Was 50
-                "model.wandb": False,
+                "model.wandb": True,
                 "simulator.reuse_no_control": False,
                 "simulator.firm_count": 1,
                 "simulator.agents_know_partial_demand": True,
@@ -112,7 +112,7 @@ def in_loop_retraining(experiment = "first_firm_constant", firm_count=2, episode
     x = [[elem[0]["sac"][k][0] for elem in output_data] for k in range(4)]
     # x = [[elem[0]["sac"][k][0] for elem in data] for k in range(4)]
     window = 5
-    for k in range(4):
+    for k in range(firm_count):
         plt.plot(np.arange(len(x[k])), x[k], label=f'Firm {k} SAC, alpha={alphas[k]:.2f}', color=colors[k], linewidth=3)
         weights = np.ones(window) / window
         moving_avg = np.convolve(x[k], weights, mode='valid')
@@ -139,8 +139,8 @@ def replot(filename):
     with open(alphas_file, "wb") as f:
         pickle.dump(alphas, f)
     print(data)
-    x = [[elem[0]["sac"][k][0] for elem in data] for k in range(4)]
-    for k in range(4):
+    x = [[elem[0]["sac"][k][0] for elem in data] for k in range(firm_count)]
+    for k in range(firm_count):
         plt.plot(np.arange(len(x[k])), x[k], label=f'Firm {k} SAC, alpha={alphas[k]:.2f}')
         z = np.polyfit(np.arange(len(x[k])), x[k], 1)
         p = np.poly1d(z)
@@ -154,4 +154,5 @@ def replot(filename):
 
 
 if __name__ == "__main__":
-    in_loop_retraining(experiment="first_firm_constant", firm_count=2, episodes_before_retrain=100, max_retrain=30)
+    firm_count = 2
+    in_loop_retraining(experiment="first_firm_constant", firm_count=firm_count, episodes_before_retrain=100, max_retrain=30)
